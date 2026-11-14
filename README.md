@@ -4,24 +4,27 @@ Stock control run from a WhatsApp group. Anyone in the group logs a movement wit
 
 The first store using it is **Gikambura Office Store**, which holds Fundi Kanga's Hero welding rods: 279 boxes arrived, Fundi Kanga took 2, and 277 boxes (1,108 pkt) remain.
 
-## Message format (pin this in the group)
+## How people log stock
 
-| Message | Meaning |
+Nobody has to learn a format. People write in the group the way they normally talk, in English, Swahili or a mix, as long as they include the amount:
+
+| They write | Recorded as |
 |---|---|
-| `#out 2 box hero for gate job` | 2 boxes taken out |
-| `#out 3 pkt hero @Kamau` | 3 packets taken by Kamau, posted by someone else |
-| `#return 1 pkt hero` | unused stock brought back |
-| `#in 50 box hero` | new delivery |
-| `#count 270 box hero` | stock take: the balance is set to this |
+| Nimechukua box 2 za hero ya kazi Kitengela | Kamau took 2 boxes (Kitengela) |
+| took a box for Juja gate | Otieno took 1 box (Juja gate) |
+| Nimempa Otieno paketi 3 | Otieno took 3 packets, posted by Miringu |
+| nimerudisha paketi moja | Kamau brought back 1 packet |
+| Zimefika box 50 | 50 boxes came into the store |
+| counted, 270 boxes remaining | stock count: the balance is set to 270 boxes |
 
-Rules: start the message with `#`, write the number as digits, and put the unit before the item. 1 box = 4 pkt. Messages without `#` are ignored, so normal chat is fine.
+Greetings, questions and other chat are ignored. If a message about stock is unclear, for example "box mbili" with no word saying whether it was taken or returned, it is **never guessed**. It goes on a list for the storekeeper to check. Word lists live in `DIRECTIONS` / `NUMBER_WORDS` in `stock.py`, and unit words such as paketi, mabox and katoni in `business.toml`.
 
 ## Storekeeper routine (daily, about 2 minutes)
 
 1. WhatsApp → group → ⋮ → More → Export chat → **Without media** → save the `.txt` to this folder.
 2. `python3 stock.py sync "WhatsApp Chat with <group>.txt"`
-3. Fix anything listed under "need attention" (a wrong item or a number written as a word). Ask the person to repost it, or log it by hand:
-   `python3 stock.py log "#out 2 box hero" --by Kamau --at "2026-11-15 10:30"`
+3. Check anything listed as unclear. Ask the person to say it again more clearly, or log it by hand:
+   `python3 stock.py log "took 2 boxes" --by Kamau --at "2026-11-15 10:30"`
 4. `python3 stock.py status`: paste the output back into the group.
 5. `git add -A && git commit -m "stock: 15 Nov" && git push`, which also keeps your GitHub streak going.
 
@@ -42,7 +45,7 @@ Setting this up for another business: create a private repo, copy `templates/inb
 ## Files
 
 - `business.toml`: business name, items, units, prices and reorder levels. Edit this file to use the system for another business.
-- `ledger.csv`: every movement, added to and never edited. Fix mistakes with `#return` or `#count`.
+- `ledger.csv`: every movement, added to and never edited. Fix mistakes with a return or a stock count message.
 - `needs-attention.csv`: messages that could not be read.
 - `STOCK.md` and `docs/index.html`: generated reports. The HTML file is the GitHub Pages dashboard for the group.
 
@@ -50,7 +53,7 @@ The script needs Python 3.11+ and nothing else.
 
 ## Using it for another business
 
-Copy the folder, delete `ledger.csv`, edit `business.toml` and log the opening stock with `#in`.
+Copy the folder, delete `ledger.csv`, edit `business.toml` and log the opening stock, e.g. `python3 stock.py log "received 100 boxes" --by You`.
 
 ## Roadmap (one small PR each)
 

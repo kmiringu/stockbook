@@ -15,7 +15,7 @@ key = "hero"
 name = "Hero welding rods"
 aliases = ["hero rods", "hero rod", "hero", "welding rods", "rods", "rod"]
 base_unit = "pkt"
-units = { pkt = 1, packet = 1, pack = 1, box = 4, ctn = 4 }
+units = { pkt = 1, packet = 1, pack = 1, paketi = 1, pakiti = 1, box = 4, mabox = 4, boksi = 4, ctn = 4, carton = 4, katoni = 4 }
 words = { pkt = "packet", box = "box" }   # how units are written on the page
 price = 1200        # selling price per pkt (estimated 1,150–1,200)
 reorder_at = 80     # warn when balance falls to this many pkt (20 boxes)
