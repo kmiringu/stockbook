@@ -1,0 +1,12 @@
+📦 *FUSE STORE: HERO RODS STOCK*
+Every time you take rods, post ONE message in this group:
+
+  #out 2 box hero for <job>
+  #out 3 pkt hero for <job>
+Taking for someone else? Add @name:
+  #out 1 box hero @Kamau for Ruiru site
+Brought some back?
+  #return 1 pkt hero
+
+✅ Start with #  ✅ Number in digits  ✅ 1 box = 4 pkt
+Live stock: <github pages link>
