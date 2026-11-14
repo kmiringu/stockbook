@@ -1,7 +1,7 @@
 # Stockbook config. Change this file to run the same system for any business.
 
 [business]
-name = "Fuse Ltd Store"
+name = "Gikambura Office Store"
 subtitle = "Fundi Kanga stock: Hero welding rods"
 currency = "KES"
 # The date order in your phone's WhatsApp export: "dmy" (Kenya default) or "mdy"

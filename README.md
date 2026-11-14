@@ -2,7 +2,7 @@
 
 Stock control run from a WhatsApp group. Anyone in the group logs a movement with a short message. The storekeeper exports the chat, runs one command, and the ledger, the GitHub page and a summary for the group all update.
 
-The first store using it is **Fuse Ltd Store**, which holds Fundi Kanga's Hero welding rods: 279 boxes arrived, Fundi Kanga took 2, and 277 boxes (1,108 pkt) remain.
+The first store using it is **Gikambura Office Store**, which holds Fundi Kanga's Hero welding rods: 279 boxes arrived, Fundi Kanga took 2, and 277 boxes (1,108 pkt) remain.
 
 ## Message format (pin this in the group)
 

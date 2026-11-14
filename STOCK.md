@@ -1,8 +1,8 @@
-# Fuse Ltd Store
+# Gikambura Office Store
 
 _Fundi Kanga stock: Hero welding rods_
 
-Updated 2026-11-14 22:10
+Updated 2026-11-14 22:20
 
 | Item | Balance | Taken out | Value |
 |---|---|---|---|
