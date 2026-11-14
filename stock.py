@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Stockbook: stock control driven by WhatsApp group messages.
+"""Stockbook: stock control driven by ordinary WhatsApp group messages.
 
-People type short commands in the group:
-    #out 2 box hero for gate project
-    #out 3 pkt hero @Kamau          (taken by Kamau, logged by the sender)
-    #in 50 box hero                 (new delivery)
-    #return 1 pkt hero
-    #count 270 box hero             (stock take: sets the balance)
+People write the way they normally do, in English, Swahili or a mix:
+    "Nimechukua box 2 za hero ya kazi Kitengela"
+    "took a box for Juja gate"         "Nimempa Otieno paketi 3"
+    "nimerudisha paketi moja"          "Zimefika box 50"
+    "counted, 270 boxes remaining"
+Chat, greetings and questions are ignored. Anything about stock that is unclear
+("box mbili" with no verb) is listed for the storekeeper instead of guessed.
 
 Then the storekeeper exports the chat and runs:
     python3 stock.py sync "WhatsApp Chat with Fuse Store.txt"
@@ -45,8 +46,6 @@ LINE_RE = re.compile(
     r"(\d{1,2}):(\d{2})(?::\d{2})?[\s ]*([AaPp]\.?[Mm]\.?)?\]?\s*(?:-\s*)?"
     r"([^:]+?):\s(.*)$"
 )
-CMD_RE = re.compile(r"^#(in|out|return|count)\b\s*(.*)$", re.I)
-NUM_RE = re.compile(r"^(\d+(?:\.\d+)?)\s*([a-zA-Z]+)?\s*(.*)$")
 
 
 # ---------- config & ledger ----------
@@ -105,32 +104,115 @@ def match_item(text: str, cfg: dict) -> tuple[dict | None, str]:
     return best[0], text[best[1]:].strip()
 
 
-def parse_command(text: str, cfg: dict) -> dict:
-    """Parse one '#action ...' line. Returns fields, or {'error': reason}."""
-    m = CMD_RE.match(text.strip())
-    if not m:
-        return {"error": "not a command"}
-    action, rest = m.group(1).lower(), m.group(2).strip()
-    n = NUM_RE.match(rest)
-    if not n:
-        return {"error": "missing quantity, e.g. #out 2 box hero"}
-    qty, unit_word, rest = float(n.group(1)), n.group(2) or "", n.group(3)
-    # "#out 3 hero" has no unit word: put the word back in front of the item text
-    if unit_word and not any(match_unit(unit_word, it) for it in cfg["items"]):
-        rest, unit_word = f"{unit_word} {rest}".strip(), ""
-    item, rest = match_item(rest, cfg)
-    if not item:
-        return {"error": "unknown item: " + (rest.split() or ["?"])[0]}
-    factor = match_unit(unit_word, item) if unit_word else 1.0
-    if factor is None:
-        return {"error": f"unit '{unit_word}' is not set up for {item['name']}"}
+CMD_RE = re.compile(r"^\s*#(in|out|return|count)\b", re.I)
+SYSTEM_RE = re.compile(r"^‎?\[?\d{1,2}[/.]\d{1,2}[/.]\d{2,4},?\s+\d{1,2}:\d{2}")
+
+# How people actually write. English words must match whole; Swahili stems match inside a
+# word because of verb prefixes (nime-chukua, ame-chukua, zime-fika).
+NUMBER_WORDS = {
+    "a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
+    "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12, "fifteen": 15, "twenty": 20,
+    "moja": 1, "mbili": 2, "tatu": 3, "nne": 4, "tano": 5, "sita": 6, "saba": 7, "nane": 8,
+    "tisa": 9, "kumi": 10,
+}
+DIRECTIONS = {  # checked in this order
+    "return": (["returned", "return", "returning", "brought back", "bring back", "back to store",
+                "back to the store"], ["rudish", "rejesh"]),
+    "in": (["delivered", "delivery", "arrived", "received", "restocked", "restock", "new stock",
+            "came in", "added"], ["fika", "letw"]),
+    "out": (["took", "take", "taken", "taking", "picked", "pick", "carried", "removed", "collected",
+             "issued", "used", "gave", "given", "sold", "out"], ["chukua", "chukuli", "beba", "uza", "toa", "empa", "mpea"]),
+    "count": (["counted", "count", "stock take", "stocktake", "remaining", "remain", "left", "balance"],
+              ["hesab", "baki"]),
+}
+NEGATIONS = ("not", "didn't", "didnt", "haven't", "havent", "never", "bado")
+NEG_PREFIXES = ("sija", "haja", "hatuja", "hawaja", "hakuna")
+NAME_STOP = {"I", "We", "Me", "Today", "Leo", "Jana", "Hero", "Boss", "Sir", "Please", "Pls", "Morning"}
+QTY_TOKEN = re.compile(r"\d+(?:\.\d+)?(?:mm|cm|kg|ft|m)?|[a-z']+")
+
+
+def find_direction(low: str) -> list[str]:
+    words = re.findall(r"[a-z']+", low)
+    found = []
+    for action, (english, stems) in DIRECTIONS.items():
+        if any(re.search(rf"\b{re.escape(w)}\b", low) for w in english) or \
+           any(st in w for w in words for st in stems):
+            found.append(action)
+    return found
+
+
+def find_quantities(low: str, item: dict) -> float:
+    """Sum every number+unit pair: '2 boxes and 3 packets', 'box mbili', 'a box'."""
+    toks = QTY_TOKEN.findall(low)
+    used, total = set(), 0.0
+
+    def num(i: int) -> float | None:
+        if i < 0 or i >= len(toks) or i in used:
+            return None
+        t = toks[i]
+        if re.fullmatch(r"\d+(?:\.\d+)?", t):
+            nxt = toks[i + 1] if i + 1 < len(toks) else ""
+            return None if nxt in ("mm", "cm", "kg", "ft") else float(t)
+        return float(NUMBER_WORDS[t]) if t in NUMBER_WORDS else None
+
+    found = False
+    for i, t in enumerate(toks):
+        factor = match_unit(t, item)
+        if factor is None:
+            continue
+        for j in (i - 1, i + 1):
+            n = num(j)
+            if n is not None:
+                used.add(j)
+                total += n * factor
+                found = True
+                break
+    return total if found else -1
+
+
+def parse_message(text: str, cfg: dict) -> dict | None:
+    """Read one WhatsApp message. Returns a record, {'error': why} if it looks like stock
+    talk but is unclear, or None for ordinary chat."""
+    flat = " ".join(text.split())
+    low = flat.lower()
+    if not low or "?" in low or "<media omitted>" in low:
+        return None
+    items = cfg["items"]
+    item = next((it for it in items for a in it["aliases"] if re.search(rf"\b{re.escape(a)}\b", low)), None)
+    if item is None and len(items) == 1:
+        item = items[0]
+    mentions_unit = any(match_unit(w, it) for w in re.findall(r"[a-z]+", low) for it in items) or \
+        any(re.search(rf"\b{re.escape(a)}\b", low) for it in items for a in it["aliases"])
+    cmd = CMD_RE.match(flat)
+    dirs = [cmd.group(1).lower()] if cmd else find_direction(low)
+    if not (mentions_unit or cmd):
+        return None
+    if item is None:
+        return {"error": "which item? (name it, e.g. hero rods)"}
+    qty = find_quantities(low, item)
+    if qty < 0:
+        return {"error": "no amount found (write it like '2 boxes' or '3 packets')"} if dirs else None
+    words = low.split()
+    if any(w in NEGATIONS for w in words) or any(w.startswith(NEG_PREFIXES) for w in words):
+        return {"error": "message says it did NOT happen, check with sender"}
+    if "out" in dirs and "return" in dirs:
+        return {"error": "both taking and returning in one message, split it"}
+    if not dirs:
+        return {"error": "can't tell if this was taken, returned or delivered"}
+    action = dirs[0]
     taken_by = ""
-    at = re.search(r"@([\w.'-]+(?:\s[A-Z][\w'-]+)?)", rest)
-    if at:
-        taken_by = at.group(1)
-        rest = (rest[: at.start()] + rest[at.end():]).strip()
-    note = re.sub(r"^(?:[-:,]|for\b)\s*", "", rest, flags=re.I).strip()
-    return {"action": action, "item": item["key"], "base_qty": qty * factor, "taken_by": taken_by, "note": note}
+    for pat in (r"@([A-Za-z][\w'-]+)",
+                r"\b(?:given to|gave|handed to|\w*mpa|\w*mpe|\w*mpea)\s+([A-Z][a-z]+)",
+                r"^([A-Z][a-z]+)\s+(?:has\s+)?(?:took|taken|picked|carried|collected|returned|brought|ame\w+|ali\w+)"):
+        m = re.search(pat, flat)
+        if m and m.group(1) not in NAME_STOP:
+            taken_by = m.group(1)
+            break
+    note = ""
+    m = re.search(r"\b(?:for|ya kazi|kwa kazi|kwa site|ya site|at|to)\s+(?!the store\b|store\b)(.+)", flat, re.I)
+    if m:
+        note = re.split(r"[.,;!]", m.group(1))[0].strip()[:60]
+    return {"action": action, "item": item["key"], "base_qty": qty, "taken_by": taken_by, "note": note}
 
 
 def parse_export(path: Path, cfg: dict) -> list[dict]:
@@ -139,6 +221,9 @@ def parse_export(path: Path, cfg: dict) -> list[dict]:
     for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
         m = LINE_RE.match(line)
         if not m:
+            if SYSTEM_RE.match(line):
+                msgs.append({"when": None, "sender": "", "text": ""})
+                continue
             if msgs:
                 msgs[-1]["text"] += "\n" + line
             continue
@@ -149,7 +234,7 @@ def parse_export(path: Path, cfg: dict) -> list[dict]:
         if ampm:
             h = h % 12 + (12 if ampm.lower().startswith("p") else 0)
         msgs.append({"when": datetime(y, mo, d, h, int(mm)), "sender": sender.strip(), "text": text})
-    return msgs
+    return [m for m in msgs if m["when"]]
 
 
 def make_id(when: str, who: str, raw: str) -> str:
@@ -163,31 +248,30 @@ def ingest(messages: list[dict], cfg: dict, source: str) -> tuple[int, list[dict
     trusted = {t.lower() for t in cfg["business"].get("trusted", [])}
     added, rejects = [], []
     for msg in messages:
-        for i, line in enumerate(msg["text"].splitlines()):
-            line = line.strip()
-            if not line.startswith("#") or not CMD_RE.match(line):
-                continue
-            when = msg["when"].strftime("%Y-%m-%d %H:%M")
-            rid = make_id(when, msg["sender"], f"{i}:{line}")
-            if rid in seen:
-                continue
-            seen.add(rid)
-            p = parse_command(line, cfg)
-            if "error" not in p and trusted and msg["sender"].lower() not in trusted:
-                p = {"error": "sender is not in the trusted list"}
-            if "error" in p:
-                rejects.append({"id": rid, "when": when, "sender": msg["sender"], "message": line, "problem": p["error"]})
-                continue
-            if p["action"] == "count":
-                qty = p["base_qty"] - bal[p["item"]]
-            else:
-                qty = SIGN[p["action"]] * p["base_qty"]
-            bal[p["item"]] += qty
-            added.append({
-                "id": rid, "when": when, "action": p["action"], "item": p["item"], "qty": f"{qty:g}",
-                "taken_by": p["taken_by"] or (msg["sender"] if p["action"] == "out" else ""),
-                "logged_by": msg["sender"], "note": p["note"], "source": source, "raw": line,
-            })
+        line = " ".join(msg["text"].split())
+        p = parse_message(msg["text"], cfg)
+        if p is None:
+            continue
+        when = msg["when"].strftime("%Y-%m-%d %H:%M")
+        rid = make_id(when, msg["sender"], line)
+        if rid in seen:
+            continue
+        seen.add(rid)
+        if "error" not in p and trusted and msg["sender"].lower() not in trusted:
+            p = {"error": "sender is not in the trusted list"}
+        if "error" in p:
+            rejects.append({"id": rid, "when": when, "sender": msg["sender"], "message": line, "problem": p["error"]})
+            continue
+        if p["action"] == "count":
+            qty = p["base_qty"] - bal[p["item"]]
+        else:
+            qty = SIGN[p["action"]] * p["base_qty"]
+        bal[p["item"]] += qty
+        added.append({
+            "id": rid, "when": when, "action": p["action"], "item": p["item"], "qty": f"{qty:g}",
+            "taken_by": p["taken_by"] or (msg["sender"] if p["action"] == "out" else ""),
+            "logged_by": msg["sender"], "note": p["note"], "source": source, "raw": line,
+        })
     added.sort(key=lambda r: r["when"])
     if added:
         append_rows(LEDGER, added, FIELDS)
@@ -278,7 +362,7 @@ def whatsapp_status(cfg: dict, rows: list[dict]) -> str:
         for r in reversed(recent):
             note = f" ({r['note']})" if r["note"] else ""
             lines.append(f"- {nice_time(r['when'])} {r['taken_by']}: {fmt_qty(-float(r['qty']), items[r['item']])}{note}")
-    lines += ["", "Took stock? Post: #out 2 box hero for <job>"]
+    lines += ["", "Took rods? Just say it here, e.g. _Nimechukua box 2 ya kazi Kitengela_"]
     return "\n".join(lines)
 
 
@@ -334,9 +418,22 @@ def build(cfg: dict) -> None:
         updated=e(nice_time(datetime.now().strftime("%Y-%m-%d %H:%M"))), stock=stock,
         feed="".join(feed) or "<li>Nothing recorded yet.</li>",
         people=people or "<tr><td colspan=2>Nobody yet</td></tr>",
-        wa=e(whatsapp_status(cfg, rows)))
+        wa=e(whatsapp_status(cfg, rows)), flags=flag_note())
     (ROOT / "docs").mkdir(exist_ok=True)
     (ROOT / "docs" / "index.html").write_text(page, encoding="utf-8")
+
+
+def flag_note() -> str:
+    """Who has unclear messages waiting (names and times only; the text stays private)."""
+    if not REJECTS.exists():
+        return ""
+    with REJECTS.open(newline="", encoding="utf-8") as f:
+        rows = [r for r in csv.DictReader(f) if not r.get("resolved")]
+    if not rows:
+        return ""
+    who = ", ".join(f"{html.escape(r['sender'])} ({html.escape(nice_time(r['when']))})" for r in rows[-8:])
+    return (f'<p class="mut">The storekeeper still needs to check {len(rows)} unclear '
+            f'message{"s" if len(rows) > 1 else ""}: {who}.</p>')
 
 
 TEMPLATE = """<!doctype html>
@@ -376,10 +473,11 @@ ol{{padding-left:20px}}ol li{{margin-bottom:8px}}code{{background:var(--card);bo
 
 <h2>How this works</h2>
 <ol>
-<li>When you take rods from the store, post in the WhatsApp group straight away:<br><code>#out 2 box hero for &lt;job&gt;</code> or <code>#out 3 pkt hero for &lt;job&gt;</code></li>
-<li>Taking for someone else? Add their name: <code>#out 1 box hero @Kamau</code>. Brought some back? <code>#return 1 pkt hero</code></li>
-<li>The storekeeper updates this page from the group messages, usually once a day. 1 box = 4 packets.</li>
+<li>Took rods from the store? Say so in the WhatsApp group in your own words, with the amount:<br><i>"Nimechukua box 2 ya kazi Kitengela"</i> · <i>"took 3 packets for Juja"</i></li>
+<li>Gave some to someone? <i>"Nimempa Otieno box 1"</i>. Brought some back? <i>"Nimerudisha paketi moja"</i></li>
+<li>The storekeeper updates this page from the group, usually once a day. 1 box = 4 packets.</li>
 </ol>
+{flags}
 <script>
 document.getElementById('copy').onclick=async function(){{
   try{{await navigator.clipboard.writeText(document.getElementById('wa').value);this.textContent='Copied. Paste it in the group'}}

@@ -1,12 +1,10 @@
-📦 *GIKAMBURA STORE: HERO RODS STOCK*
-Every time you take rods, post ONE message in this group:
+📦 *GIKAMBURA STORE: HERO RODS*
+Took rods? Just say so here, in your own words. Remember the amount.
 
-  #out 2 box hero for <job>
-  #out 3 pkt hero for <job>
-Taking for someone else? Add @name:
-  #out 1 box hero @Kamau for Ruiru site
-Brought some back?
-  #return 1 pkt hero
+  "Nimechukua box 2 ya kazi Kitengela"
+  "took 3 packets for Juja"
+  "Nimempa Otieno box 1"
+  "Nimerudisha paketi moja"
 
-✅ Start with #  ✅ Number in digits  ✅ 1 box = 4 pkt
-Live stock: https://kmiringu.github.io/stockbook/
+1 box = 4 packets.
+See what's in the store: https://kmiringu.github.io/stockbook/
