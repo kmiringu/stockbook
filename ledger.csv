@@ -1,3 +1,3 @@
 id,when,action,item,qty,taken_by,logged_by,note,source,raw
 81244d475f,2026-11-14 09:00,in,hero,1116,,Miringu,"opening stock, China shipment (Eliud)",manual,"#in 279 box hero opening stock, China shipment (Eliud)"
-a27e4386b3,2026-11-14 09:01,out,hero,-8,FundiKanga,Miringu,self-bought for their project,manual,#out 2 box hero @FundiKanga self-bought for their project
+a27e4386b3,2026-11-14 09:01,out,hero,-8,Fundi Kanga,Miringu,self-bought for their project,manual,#out 2 box hero @Fundi Kanga self-bought for their project

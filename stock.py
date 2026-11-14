@@ -203,15 +203,50 @@ def ingest(messages: list[dict], cfg: dict, source: str) -> tuple[int, list[dict
 
 # ---------- reports ----------
 
+def unit_word(item: dict, unit: str, n: float) -> str:
+    w = item.get("words", {}).get(unit, unit)
+    if n == 1:
+        return w
+    return w + ("es" if w.endswith(("x", "s", "ch", "sh")) else "s")
+
+
 def fmt_qty(base: float, item: dict) -> str:
-    units = sorted(item["units"].items(), key=lambda kv: -kv[1])
-    big_name, big = units[0]
-    base_name = item["base_unit"]
-    if big > 1 and abs(base) >= big:
-        whole, part = divmod(abs(base), big)
-        s = f"{int(whole)} {big_name}" + (f" + {part:g} {base_name}" if part else "")
-        return ("-" if base < 0 else "") + s
-    return f"{base:g} {base_name}"
+    """1108 pkt -> '277 boxes'; 11 pkt -> '2 boxes and 3 packets'."""
+    big_name, big = sorted(item["units"].items(), key=lambda kv: -kv[1])[0]
+    sign, a, b = ("-" if base < 0 else ""), abs(base), item["base_unit"]
+    if big > 1 and a >= big:
+        whole, part = divmod(a, big)
+        s = f"{int(whole):,} {unit_word(item, big_name, whole)}"
+        if part:
+            s += f" and {part:g} {unit_word(item, b, part)}"
+        return sign + s
+    return f"{sign}{a:g} {unit_word(item, b, a)}"
+
+
+def nice_time(when: str) -> str:
+    d = datetime.strptime(when, "%Y-%m-%d %H:%M")
+    return f"{d:%a %d %b}, {d.hour % 12 or 12}:{d:%M} {'pm' if d.hour >= 12 else 'am'}"
+
+
+def sentence(r: dict, item: dict) -> str:
+    """One ledger row as plain English."""
+    e = html.escape
+    q = fmt_qty(abs(float(r["qty"])), item)
+    who = e(r["taken_by"] or r["logged_by"])
+    note = f" ({e(r['note'])})" if r["note"] else ""
+    if r["action"] == "out":
+        s = f"<b>{who}</b> took <b>{q}</b>{note}"
+        if r["logged_by"] and e(r["logged_by"]) != who:
+            s += f", posted by {e(r['logged_by'])}"
+    elif r["action"] == "in":
+        s = f"<b>{q}</b> came into the store{note}"
+    elif r["action"] == "return":
+        s = f"<b>{who}</b> brought back <b>{q}</b>{note}"
+    else:
+        diff = float(r["qty"])
+        what = "matched the record" if diff == 0 else (f"found {q} {'more' if diff > 0 else 'fewer'} than the record")
+        s = f"<b>{e(r['logged_by'])}</b> counted the stock and {what}"
+    return s
 
 
 def summary_rows(cfg: dict, rows: list[dict]) -> list[dict]:
@@ -242,8 +277,8 @@ def whatsapp_status(cfg: dict, rows: list[dict]) -> str:
         items = {i["key"]: i for i in cfg["items"]}
         for r in reversed(recent):
             note = f" ({r['note']})" if r["note"] else ""
-            lines.append(f"- {r['when'][5:]} {r['taken_by']}: {fmt_qty(-float(r['qty']), items[r['item']])}{note}")
-    lines += ["", "Log with: #out 2 box hero for <job>"]
+            lines.append(f"- {nice_time(r['when'])} {r['taken_by']}: {fmt_qty(-float(r['qty']), items[r['item']])}{note}")
+    lines += ["", "Took stock? Post: #out 2 box hero for <job>"]
     return "\n".join(lines)
 
 
@@ -268,57 +303,89 @@ def build(cfg: dict) -> None:
                   f"{fmt_qty(q, items[r['item']])} | {r['taken_by']} | {r['logged_by']} | {r['note']} |")
     (ROOT / "STOCK.md").write_text("\n".join(md) + "\n", encoding="utf-8")
 
-    # docs/index.html: GitHub Pages dashboard for the group
+    # docs/index.html: plain-language page for the WhatsApp group
+    e = html.escape
     by_person = defaultdict(float)
     for r in rows:
         if r["action"] == "out":
             by_person[(r["taken_by"], r["item"])] += -float(r["qty"])
-    e = html.escape
-    cards = "".join(
-        f'<div class="card{" low" if s["low"] else ""}"><div class="lbl">{e(s["item"]["name"])}</div>'
+    stock = "".join(
+        f'<section class="now{" low" if s["low"] else ""}">'
+        f'<div class="lbl">{e(s["item"]["name"])}: in the store now</div>'
         f'<div class="big">{e(fmt_qty(s["balance"], s["item"]))}</div>'
-        f'<div class="sub">{s["balance"]:g} {e(s["item"]["base_unit"])} · ≈ {e(cur)} {s["value"]:,.0f}'
-        f'{" · reorder now" if s["low"] else ""}</div>'
-        f'<div class="sub">Taken out: {e(fmt_qty(s["out"], s["item"]))}</div></div>'
+        f'<div class="sub">{s["balance"]:,.0f} {unit_word(s["item"], s["item"]["base_unit"], s["balance"])}'
+        f' · worth about {e(cur)} {s["value"]:,.0f}</div>'
+        f'<div class="pill">{"Running low. Time to reorder" if s["low"] else "Enough stock"}</div>'
+        f'<div class="sub">Taken out so far: {e(fmt_qty(s["out"], s["item"]))}</div></section>'
         for s in sums)
+    feed, last_day = [], None
+    for r in reversed(rows):
+        day = nice_time(r["when"]).split(",")[0]
+        if day != last_day:
+            feed.append(f'<li class="day">{e(day)}</li>')
+            last_day = day
+        feed.append(f'<li><span class="t">{e(nice_time(r["when"]).split(", ")[1])}</span>'
+                    f'<span class="dot {e(r["action"])}"></span><span>{sentence(r, items[r["item"]])}</span></li>')
     people = "".join(
-        f"<tr><td>{e(p or '?')}</td><td>{e(items[k]['name'])}</td><td class='n'>{e(fmt_qty(q, items[k]))}</td></tr>"
+        f"<tr><td>{e(p or '?')}</td><td class='n'>{e(fmt_qty(q, items[k]))}</td></tr>"
         for (p, k), q in sorted(by_person.items(), key=lambda kv: -kv[1]))
-    moves = "".join(
-        f"<tr><td>{e(r['when'])}</td><td><span class='tag {e(r['action'])}'>{e(r['action'])}</span></td>"
-        f"<td>{e(items[r['item']]['name'])}</td><td class='n'>{'+' if float(r['qty']) > 0 else ''}"
-        f"{e(fmt_qty(float(r['qty']), items[r['item']]))}</td><td>{e(r['taken_by'])}</td><td>{e(r['note'])}</td></tr>"
-        for r in reversed(rows))
-    page = TEMPLATE.format(name=e(cfg["business"]["name"]), subtitle=e(cfg["business"].get("subtitle", "")),
-                           updated=f"{datetime.now():%d %b %Y, %H:%M}", cards=cards,
-                           people=people or "<tr><td colspan=3>None yet</td></tr>",
-                           moves=moves or "<tr><td colspan=6>None yet</td></tr>")
+    page = TEMPLATE.format(
+        name=e(cfg["business"]["name"]), subtitle=e(cfg["business"].get("subtitle", "")),
+        updated=e(nice_time(datetime.now().strftime("%Y-%m-%d %H:%M"))), stock=stock,
+        feed="".join(feed) or "<li>Nothing recorded yet.</li>",
+        people=people or "<tr><td colspan=2>Nobody yet</td></tr>",
+        wa=e(whatsapp_status(cfg, rows)))
     (ROOT / "docs").mkdir(exist_ok=True)
     (ROOT / "docs" / "index.html").write_text(page, encoding="utf-8")
 
 
 TEMPLATE = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{name} Stock</title>
+<title>{name}</title>
 <style>
-:root{{--bg:#f7f6f2;--fg:#1d1d1b;--mut:#6b6a64;--card:#fff;--line:#e4e2da;--acc:#c2410c;--ok:#15803d;--bad:#b91c1c}}
-@media (prefers-color-scheme:dark){{:root{{--bg:#151513;--fg:#ecebe6;--mut:#a09f98;--card:#1f1f1c;--line:#33322d;--acc:#fb923c;--ok:#4ade80;--bad:#f87171}}}}
-*{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 system-ui,sans-serif}}
-main{{max-width:960px;margin:auto;padding:24px 16px 48px}}h1{{margin:0;font-size:1.6rem}}h2{{font-size:1.05rem;margin:32px 0 8px}}
-.mut{{color:var(--mut)}}.cards{{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));margin-top:20px}}
-.card{{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;border-left:4px solid var(--ok)}}
-.card.low{{border-left-color:var(--bad)}}.lbl{{color:var(--mut);font-size:.85rem}}.big{{font-size:1.7rem;font-weight:700;margin:4px 0}}
-.sub{{color:var(--mut);font-size:.85rem}}.wrap{{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:12px}}
-table{{border-collapse:collapse;width:100%;min-width:520px}}td,th{{padding:8px 12px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}}
-th{{font-size:.8rem;color:var(--mut);font-weight:600}}.n{{text-align:right;font-variant-numeric:tabular-nums}}
-.tag{{font-size:.75rem;padding:2px 8px;border-radius:99px;border:1px solid var(--line)}}.tag.out{{color:var(--acc)}}.tag.in,.tag.return{{color:var(--ok)}}
-code{{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:1px 6px}}
+:root{{--bg:#f6f5f1;--fg:#1c1c1a;--mut:#67665f;--card:#fff;--line:#e3e1d8;--ok:#15803d;--okbg:#dcfce7;--bad:#b91c1c;--badbg:#fee2e2;--acc:#c2410c}}
+@media (prefers-color-scheme:dark){{:root{{--bg:#141412;--fg:#ecebe6;--mut:#a3a29a;--card:#1e1e1b;--line:#34332e;--ok:#4ade80;--okbg:#14532d;--bad:#fca5a5;--badbg:#7f1d1d;--acc:#fb923c}}}}
+*{{box-sizing:border-box}}body{{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif}}
+main{{max-width:720px;margin:auto;padding:24px 16px 56px}}h1{{margin:0;font-size:1.5rem}}h2{{font-size:1.1rem;margin:36px 0 10px}}
+.mut,.sub{{color:var(--mut)}}.sub{{font-size:.9rem}}
+.now{{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;margin-top:18px}}
+.lbl{{color:var(--mut);font-size:.9rem}}.big{{font-size:2.4rem;font-weight:750;line-height:1.15;margin:4px 0}}
+.pill{{display:inline-block;margin:10px 0 6px;padding:3px 12px;border-radius:99px;font-size:.85rem;font-weight:600;background:var(--okbg);color:var(--ok)}}
+.low .pill{{background:var(--badbg);color:var(--bad)}}
+.fresh{{margin-top:14px;font-size:.9rem;color:var(--mut)}}
+button{{font:inherit;font-size:.9rem;margin-top:10px;padding:8px 14px;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--fg);cursor:pointer}}
+ul.feed{{list-style:none;margin:0;padding:0;overflow:hidden;background:var(--card);border:1px solid var(--line);border-radius:14px}}
+.feed li{{display:flex;gap:10px;align-items:baseline;padding:10px 16px;border-bottom:1px solid var(--line)}}.feed li:last-child{{border:0}}
+.feed li.day{{font-weight:650;font-size:.85rem;color:var(--mut);background:var(--bg);padding:6px 16px}}
+.t{{min-width:64px;color:var(--mut);font-size:.85rem;font-variant-numeric:tabular-nums}}
+.dot{{width:9px;height:9px;border-radius:50%;flex:none;background:var(--mut);transform:translateY(-1px)}}.dot.out{{background:var(--acc)}}.dot.in,.dot.return{{background:var(--ok)}}
+table{{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden}}
+td{{padding:10px 16px;border-bottom:1px solid var(--line)}}.n{{text-align:right;font-variant-numeric:tabular-nums}}
+ol{{padding-left:20px}}ol li{{margin-bottom:8px}}code{{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:.9em}}
 </style></head><body><main>
-<h1>{name}</h1><div class="mut">{subtitle} · updated {updated}</div>
-<div class="cards">{cards}</div>
-<h2>Who has taken what</h2><div class="wrap"><table><tr><th>Person</th><th>Item</th><th class="n">Total out</th></tr>{people}</table></div>
-<h2>All movements</h2><div class="wrap"><table><tr><th>When</th><th>Action</th><th>Item</th><th class="n">Qty</th><th>Taken by</th><th>Note</th></tr>{moves}</table></div>
-<h2>How to log</h2><p class="mut">Post in the WhatsApp group: <code>#out 2 box hero for gate job</code> · <code>#out 3 pkt hero @Kamau</code> · <code>#return 1 pkt hero</code> · <code>#in 50 box hero</code> · <code>#count 270 box hero</code></p>
+<h1>{name}</h1><div class="mut">{subtitle}</div>
+{stock}
+<div class="fresh">Last updated <b>{updated}</b>. Anything posted in the WhatsApp group after that will show at the next update.</div>
+<button id="copy">Copy summary for WhatsApp</button><textarea id="wa" hidden>{wa}</textarea>
+
+<h2>What happened</h2>
+<ul class="feed">{feed}</ul>
+
+<h2>Total taken by each person</h2>
+<table>{people}</table>
+
+<h2>How this works</h2>
+<ol>
+<li>When you take rods from the store, post in the WhatsApp group straight away:<br><code>#out 2 box hero for &lt;job&gt;</code> or <code>#out 3 pkt hero for &lt;job&gt;</code></li>
+<li>Taking for someone else? Add their name: <code>#out 1 box hero @Kamau</code>. Brought some back? <code>#return 1 pkt hero</code></li>
+<li>The storekeeper updates this page from the group messages, usually once a day. 1 box = 4 packets.</li>
+</ol>
+<script>
+document.getElementById('copy').onclick=async function(){{
+  try{{await navigator.clipboard.writeText(document.getElementById('wa').value);this.textContent='Copied. Paste it in the group'}}
+  catch(_){{this.textContent='Copy failed. Select the text manually'}}
+}};
+</script>
 </main></body></html>
 """
 
