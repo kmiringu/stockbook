@@ -9,4 +9,4 @@ Brought some back?
   #return 1 pkt hero
 
 ✅ Start with #  ✅ Number in digits  ✅ 1 box = 4 pkt
-Live stock: <github pages link>
+Live stock: https://kmiringu.github.io/stockbook/
