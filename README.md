@@ -1,65 +1,51 @@
 # Stockbook
 
-Stock control run from a WhatsApp group. Anyone in the group logs a movement with a short message. The storekeeper exports the chat, runs one command, and the ledger, the GitHub page and a summary for the group all update.
+Simple stock control for a small store. People record what they take by scanning a QR code on the store door and tapping a few buttons. The record lives in a Google Sheet that the owner can open at any time, and the owner gets a summary email every evening.
 
-The first store using it is **Gikambura Office Store**, which holds Fundi Kanga's Hero welding rods: 279 boxes arrived, Fundi Kanga took 2, and 277 boxes (1,108 pkt) remain.
+It is first used at **Gikambura Office Store** for Fundi Kanga's import: Hero welding rods (279 boxes, of which Fundi Kanga took 2), body filler, grey primer and white spirit.
 
-## How people log stock
+## How it works
 
-Nobody has to learn a format. People write in the group the way they normally talk, in English, Swahili or a mix, as long as they include the amount:
+```
+ Store door QR ──► phone page (GitHub Pages) ──► Google Sheet (Apps Script)
+   scan            tap name → product →            Moves · Products · People
+                   took / brought back →            Summary · Settings
+                   amount → Record                      │
+                                                        └─► 6 pm email to the owner
+```
 
-| They write | Recorded as |
+- **Nothing to remember.** Tap your name (the phone remembers it), tap the product, set the amount with + / −, then tap Record. Boxes and packets are both buttons.
+- **Works with weak signal.** Records are kept on the phone and sent automatically once the network returns, with the time the stock was actually taken.
+- **Mistakes can be undone** by the same person within 30 minutes. Nothing is deleted; the record is marked `void` in the sheet.
+- **Separate from WhatsApp chat.** The page has a "Copy summary for WhatsApp" button for anyone who wants to share the numbers.
+- **Private.** The repo holds only code. Stock data stays in the Google Sheet. The QR link carries a store key, and changing the key in Settings locks out old links.
+
+## Set up (about 15 minutes, once)
+
+1. Create a Google Sheet (best in the owner's Google account, or share it with the owner later).
+2. Open **Extensions → Apps Script**, replace everything with [`apps-script/Code.gs`](apps-script/Code.gs) and save.
+3. Select **`setup`** in the function list, click **Run** and allow access. This creates the tabs Summary, Settings, Products, People and Moves.
+4. Click **Deploy → New deployment → ⚙ Web app**. Set *Execute as*: **Me** and *Who has access*: **Anyone**, then click Deploy and copy the URL.
+5. In the sheet's **Settings** tab, paste the URL into *Web app URL* and add the owner's email under *Owner emails*.
+6. **Products** tab: fill in the yellow cells (packing, opening count and price for filler, primer and spirit).
+   **People** tab: add everyone who takes stock.
+7. Open the *Store link* from Settings on your phone, tap **QR code for the store door**, then print it and stick it up.
+
+If you change `Code.gs` later, use **Deploy → Manage deployments → Edit → New version** to keep the same URL.
+
+## Daily life
+
+| Who | What |
 |---|---|
-| Nimechukua box 2 za hero ya kazi Kitengela | Kamau took 2 boxes (Kitengela) |
-| took a box for Juja gate | Otieno took 1 box (Juja gate) |
-| Nimempa Otieno paketi 3 | Otieno took 3 packets, posted by Miringu |
-| nimerudisha paketi moja | Kamau brought back 1 packet |
-| Zimefika box 50 | 50 boxes came into the store |
-| counted, 270 boxes remaining | stock count: the balance is set to 270 boxes |
-
-Greetings, questions and other chat are ignored. If a message about stock is unclear, for example "box mbili" with no word saying whether it was taken or returned, it is **never guessed**. It goes on a list for the storekeeper to check. Word lists live in `DIRECTIONS` / `NUMBER_WORDS` in `stock.py`, and unit words such as paketi, mabox and katoni in `business.toml`.
-
-## Storekeeper routine (daily, about 2 minutes)
-
-1. WhatsApp → group → ⋮ → More → Export chat → **Without media** → save the `.txt` to this folder.
-2. `python3 stock.py sync "WhatsApp Chat with <group>.txt"`
-3. Check anything listed as unclear. Ask the person to say it again more clearly, or log it by hand:
-   `python3 stock.py log "took 2 boxes" --by Kamau --at "2026-11-15 10:30"`
-4. `python3 stock.py status`: paste the output back into the group.
-5. `git add -A && git commit -m "stock: 15 Nov" && git push`, which also keeps your GitHub streak going.
-
-You can sync the same export more than once. Entries already in the ledger are skipped.
-
-## Updating from your phone (no laptop needed)
-
-The raw chat goes to a **private** repo (`stockbook-inbox`). A GitHub Action there updates this public repo, so only the stock record is ever public.
-
-1. WhatsApp → group → ⋮ → More → Export chat → **Without media** → save the file.
-2. In a browser, open `github.com/kmiringu/stockbook-inbox` → **Add file → Upload files** → pick the `.txt` → **Commit changes**.
-3. About a minute later the live page updates. The **Actions** tab of the inbox repo shows the run, a status summary ready to paste and any messages that need fixing.
-
-Uploading the same chat again is safe because entries already recorded are skipped. To let a deputy do this while you're away, add them as a collaborator on the inbox repo.
-
-Setting this up for another business: create a private repo, copy `templates/inbox-sync.yml` to `.github/workflows/sync.yml` and set the variable `STOCKBOOK_REPO`. Then generate an SSH key, add the public half as a **write** deploy key on the stockbook repo, and save the private half as the secret `STOCKBOOK_DEPLOY_KEY` in the inbox repo.
-
-## Files
-
-- `business.toml`: business name, items, units, prices and reorder levels. Edit this file to use the system for another business.
-- `ledger.csv`: every movement, added to and never edited. Fix mistakes with a return or a stock count message.
-- `needs-attention.csv`: messages that could not be read.
-- `STOCK.md` and `docs/index.html`: generated reports. The HTML file is the GitHub Pages dashboard for the group.
-
-The script needs Python 3.11+ and nothing else.
+| Anyone taking stock | Scan → name → product → amount → Record. About 10 seconds. |
+| Anyone returning stock | Same steps, but tap "I brought back". |
+| Storekeeper or deputy | Records new deliveries. Does a **stock count** every Friday (tap "New delivery or stock count…"), which catches anything not recorded. |
+| Owner | Reads the 6 pm email and opens the sheet's **Summary** tab whenever needed. |
 
 ## Using it for another business
 
-Copy the folder, delete `ledger.csv`, edit `business.toml` and log the opening stock, e.g. `python3 stock.py log "received 100 boxes" --by You`.
+Make a new Google Sheet, paste `Code.gs`, run `setup` and edit the Products and People tabs. The same page works for any store, because the QR link says which sheet to use.
 
-## Roadmap (one small PR each)
+## Earlier version
 
-- [ ] Rod sizes as separate items (2.5 mm / 3.2 mm / 4.0 mm)
-- [ ] Price per job and money owed by each person
-- [ ] GitHub Action that rebuilds the page on every push
-- [ ] Weekly summary of how fast stock is being used
-- [x] Update from a phone (private inbox repo + Action)
-- [ ] WhatsApp Cloud API webhook so no export is needed
+`legacy-whatsapp/` contains the first attempt, which read stock movements out of a WhatsApp group chat. It was too fragile for a busy group that discusses other things too.
