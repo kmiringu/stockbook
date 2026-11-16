@@ -32,7 +32,7 @@ function setup() {
   };
 
   sheet('Settings', ['Setting', 'Value', 'Notes'], [
-    ['Store name', 'Gikambura Office Store', 'Shown at the top of the page'],
+    ['Store name', 'My Store', 'Shown at the top of the page'],
     ['Store key', Utilities.getUuid().replace(/-/g, '').slice(0, 10), 'Secret in the QR link. Change it to lock out old links.'],
     ['Owner emails', '', 'Comma-separated. They get a summary every evening.'],
     ['Daily email hour', 18, '24h clock, Nairobi time'],
@@ -41,18 +41,14 @@ function setup() {
   ]);
   const prod = sheet('Products',
     ['Product', 'Small unit', 'Big unit', 'Small per big', 'Opening stock (small units)', 'Reorder at (small units)', 'Price per small unit', 'Active'], [
-    ['Hero welding rods', 'packet', 'box', 4, 279 * 4, 80, 1200, 'yes'],
-    ['Body filler', 'tin', 'carton', '', '', '', '', 'yes'],
-    ['Grey primer', 'tin', 'carton', '', '', '', '', 'yes'],
-    ['White spirit', 'bottle', 'carton', '', '', '', '', 'yes'],
+    ['Example product', 'packet', 'box', 4, '', '', '', 'yes'],
+    ['Another product', 'tin', 'carton', 12, '', '', '', 'yes'],
   ]);
-  prod.getRange('D3:G5').setBackground('#fff4c2');
-  prod.getRange('A1').setNote('Yellow cells: fill in packing, opening count and prices. ' +
+  prod.getRange('A2:G3').setBackground('#fff4c2');
+  prod.getRange('A1').setNote('Yellow cells: replace the examples with your products, packing, opening count and prices. ' +
     'Leave "Big unit" empty if it is only handled singly. Set Active to "no" to hide a product.');
-  sheet('People', ['Name', 'Active'], [['Miringu', 'yes'], ['Eliud', 'yes']]);
-  sheet('Moves', MOVE_HEADERS, [[
-    'seed0001', Utilities.parseDate('2026-11-14 09:01', TZ, 'yyyy-MM-dd HH:mm'), 'Fundi Kanga', 'Hero welding rods', 'Took', 8, -8,
-    'Self-bought for their project (2 boxes)', '', new Date()]]);
+  sheet('People', ['Name', 'Active'], [['Your name', 'yes']]);
+  sheet('Moves', MOVE_HEADERS, []);
   buildSummary_();
   updateStoreLink_();
 
