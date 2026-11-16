@@ -56,9 +56,15 @@ function setup() {
   buildSummary_();
   updateStoreLink_();
 
+  updateTriggers();
+}
+
+/** Run this once after pasting a new version of this file (it is safe to run again). */
+function updateTriggers() {
   ScriptApp.getProjectTriggers().forEach(t => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('dailyEmail').timeBased().everyDays(1).atHour(Number(settings_()['Daily email hour']) || 18).inTimezone(TZ).create();
-  ScriptApp.newTrigger('onSettingsEdit').forSpreadsheet(ss).onEdit().create();
+  ScriptApp.newTrigger('weeklyEmail').timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(8).inTimezone(TZ).create();
+  ScriptApp.newTrigger('onSettingsEdit').forSpreadsheet(SpreadsheetApp.getActive()).onEdit().create();
 }
 
 function buildSummary_() {
@@ -226,30 +232,61 @@ function qtyText_(p, n) {
   return `${a.toLocaleString()} ${plural(p.unit, a)}`;
 }
 
-function dailyEmail() {
-  const s = settings_();
-  const to = String(s['Owner emails'] || '').trim();
-  if (!to) return;
-  const st = state_();
-  const byName = Object.fromEntries(st.products.map(p => [p.name, p]));
-  const today = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
-  const todays = st.recent.filter(m => m.time.startsWith(today)).reverse();
-  const verb = { Took: 'took', Returned: 'returned', Received: 'received', Counted: 'counted' };
-  const rows = st.products.map(p => {
+function stockRows_(st) {
+  return st.products.map(p => {
     const status = !p.hasOpening ? ['Opening count missing', '#92400e'] : p.balance <= p.reorder ? ['Reorder', '#b91c1c'] : ['OK', '#15803d'];
     return `<tr><td>${p.name}</td><td style="text-align:right"><b>${p.hasOpening ? qtyText_(p, p.balance) : '–'}</b></td>` +
       `<td style="color:${status[1]}">${status[0]}</td></tr>`;
   }).join('');
-  const moves = todays.length ? todays.map(m => `<li>${m.time.slice(11)}: ${m.who} ${verb[m.action]} ` +
-    `${qtyText_(byName[m.product] || { unit: '' }, m.action === 'Counted' ? m.change : m.qty)} ${m.action === 'Counted' ? '(difference)' : ''} of ${m.product}` +
-    `${m.note ? ` (${m.note})` : ''}</li>`).join('') : '<li>No movements today.</li>';
-  MailApp.sendEmail({
-    to,
-    subject: `${st.store} stock, ${Utilities.formatDate(new Date(), TZ, 'EEE d MMM')}`,
-    htmlBody: `<div style="font-family:system-ui,sans-serif;max-width:560px">
-      <h2 style="margin:0 0 8px">${st.store}</h2>
-      <h3>In the store now</h3><table cellpadding="6" style="border-collapse:collapse">${rows}</table>
-      <h3>Today</h3><ul>${moves}</ul>
-      <p style="color:#666">The full record is in the Google Sheet.</p></div>`,
-  });
+}
+
+function moveLine_(m, byName) {
+  const verb = { Took: 'took', Returned: 'returned', Received: 'received', Counted: 'counted' };
+  const p = byName[m.product] || { unit: '' };
+  const q = qtyText_(p, m.action === 'Counted' ? m.change : m.qty);
+  return `<li>${m.time.slice(5, 10).split('-').reverse().join('/')} ${m.time.slice(11)}: ${m.who} ${verb[m.action]} ${q}` +
+    `${m.action === 'Counted' ? ' difference in' : ' of'} ${m.product}${m.note ? ` (${m.note})` : ''}</li>`;
+}
+
+function send_(subject, body) {
+  const to = String(settings_()['Owner emails'] || '').trim();
+  if (!to) return;
+  MailApp.sendEmail({ to, subject, htmlBody: `<div style="font-family:system-ui,sans-serif;max-width:560px">${body}` +
+    `<p style="color:#666">The full record is in the Google Sheet.</p></div>` });
+}
+
+/** Evening email: only on days when stock actually moved. */
+function dailyEmail() {
+  const st = state_();
+  const today = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
+  const todays = st.recent.filter(m => m.time.startsWith(today)).reverse();
+  if (!todays.length) return;
+  const byName = Object.fromEntries(st.products.map(p => [p.name, p]));
+  send_(`${st.store}: ${todays.length} movement${todays.length > 1 ? 's' : ''} today`,
+    `<h2 style="margin:0 0 8px">${st.store}</h2><h3>Today</h3><ul>${todays.map(m => moveLine_(m, byName)).join('')}</ul>` +
+    `<h3>In the store now</h3><table cellpadding="6" style="border-collapse:collapse">${stockRows_(st)}</table>`);
+}
+
+/** Monday morning: the week in one email, with money sitting in stock and slow movers. */
+function weeklyEmail() {
+  const st = state_();
+  const byName = Object.fromEntries(st.products.map(p => [p.name, p]));
+  const weekAgo = Utilities.formatDate(new Date(Date.now() - 7 * 864e5), TZ, "yyyy-MM-dd'T'HH:mm");
+  const all = moves_().filter(m => m.status !== 'void');
+  const week = st.recent.filter(m => m.time >= weekAgo).reverse();
+  const value = st.products.reduce((t, p) => t + Math.max(0, p.balance) * p.price, 0);
+  const idle = st.products.filter(p => p.hasOpening).map(p => {
+    const last = all.filter(m => m.product === p.name && m.action === 'Took').pop();
+    const days = last ? Math.floor((Date.now() - new Date(last.time)) / 864e5) : null;
+    return `<li>${p.name}: ${days === null ? 'nothing taken out yet' : days === 0 ? 'moved today' : `last taken out ${days} day${days > 1 ? 's' : ''} ago`}` +
+      ` · taken out so far ${qtyText_(p, p.out)}</li>`;
+  }).join('');
+  const missing = st.products.filter(p => !p.hasOpening || !p.price).map(p => p.name);
+  send_(`${st.store}: weekly stock report`,
+    `<h2 style="margin:0 0 8px">${st.store}: this week</h2>` +
+    `<p style="font-size:18px">Stock value in the store: <b>KES ${Math.round(value).toLocaleString()}</b></p>` +
+    `<h3>In the store now</h3><table cellpadding="6" style="border-collapse:collapse">${stockRows_(st)}</table>` +
+    `<h3>How fast it's moving</h3><ul>${idle}</ul>` +
+    `<h3>Movements in the last 7 days (${week.length})</h3><ul>${week.length ? week.map(m => moveLine_(m, byName)).join('') : '<li>None.</li>'}</ul>` +
+    (missing.length ? `<p style="color:#92400e">Opening count or price missing for: ${missing.join(', ')}.</p>` : ''));
 }

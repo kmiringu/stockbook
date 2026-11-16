@@ -31,7 +31,7 @@ It is first used at **Gikambura Office Store** for Fundi Kanga's import: Hero we
    **People** tab: add everyone who takes stock.
 7. Open the *Store link* from Settings on your phone, tap **QR code for the store door**, then print it and stick it up.
 
-If you change `Code.gs` later, use **Deploy → Manage deployments → Edit → New version** to keep the same URL.
+If you change `Code.gs` later, paste the new version, save and run **`updateTriggers`** once. Only use **Deploy → Manage deployments → Edit → New version** (which keeps the same URL) when the change affects the phone page's backend (`doGet`/`doPost`).
 
 ## Daily life
 
@@ -40,7 +40,7 @@ If you change `Code.gs` later, use **Deploy → Manage deployments → Edit → 
 | Anyone taking stock | Scan → name → product → amount → Record. About 10 seconds. |
 | Anyone returning stock | Same steps, but tap "I brought back". |
 | Storekeeper or deputy | Records new deliveries. Does a **stock count** every Friday (tap "New delivery or stock count…"), which catches anything not recorded. |
-| Owner | Reads the 6 pm email and opens the sheet's **Summary** tab whenever needed. |
+| Owner | Gets a 6 pm email **only on days stock moved**, plus a **Monday 8 am weekly report** (stock value, slow movers, the week's movements). |
 
 ## Using it for another business
 
