@@ -88,7 +88,11 @@ input.txt{width:100%;font:inherit;padding:14px;border-radius:12px;border:1px sol
     <button id="plus" aria-label="More">+</button>
   </div>
   <div class="seg" id="units"></div>
-  <label for="note">For which job? (optional)</label>
+  <div id="paidBox">
+    <label for="paid">Amount paid, KES (if sold)</label>
+    <input class="txt" id="paid" inputmode="numeric" placeholder="e.g. 3500" maxlength="9">
+  </div>
+  <label for="note" id="noteLbl">For which job or customer? (optional)</label>
   <input class="txt" id="note" placeholder="e.g. Kitengela gate" maxlength="100">
   <button class="primary" id="save"></button>
 </section>
@@ -174,7 +178,7 @@ input.txt{width:100%;font:inherit;padding:14px;border-radius:12px;border:1px sol
       const p = byName[m.product] || { unit: '' };
       const q = qtyText(p, m.qty) + (m.action === 'Counted' ? ' of' : '');
       return `<li><span class="t">${esc(niceTime(m.time))}${m.pending ? ' · not sent yet' : ''}</span>
-        <b>${esc(m.who)}</b> ${verb[m.action]} ${esc(q)}${m.action === 'Counted' ? '' : ' of'} ${esc(m.product)}${m.note ? ` <span class="mut">(${esc(m.note)})</span>` : ''}</li>`;
+        <b>${esc(m.who)}</b> ${verb[m.action]} ${esc(q)}${m.action === 'Counted' ? '' : ' of'} ${esc(m.product)}${m.amount != null ? `, paid KES ${esc(Number(m.amount).toLocaleString())}` : ''}${m.note ? ` <span class="mut">(${esc(m.note)})</span>` : ''}</li>`;
     }).join('') : '<li class="mut">Nothing recorded yet.</li>';
   }
 
@@ -183,7 +187,7 @@ input.txt{width:100%;font:inherit;padding:14px;border-radius:12px;border:1px sol
     cur = p; action = 'Took'; unitBig = !!(p.big && p.per > 1);
     $('rProd').textContent = p.name;
     $('rBal').textContent = p.hasOpening ? `In store: ${qtyText(p, p.balance)}` : '';
-    $('qty').value = 1; $('note').value = '';
+    $('qty').value = 1; $('note').value = ''; $('paid').value = '';
     $('more').hidden = true; $('moreBtn').hidden = false;
     $('units').innerHTML = unitBig
       ? `<button data-u="big" aria-pressed="true">${esc(plural(p.big, 2))}</button><button data-u="small">${esc(plural(p.unit, 2))}</button>` : '';
@@ -194,7 +198,7 @@ input.txt{width:100%;font:inherit;padding:14px;border-radius:12px;border:1px sol
   $('moreBtn').onclick = () => { $('more').hidden = false; $('moreBtn').hidden = true; };
   $('minus').onclick = () => { $('qty').value = Math.max(action === 'Counted' ? 0 : 1, (+$('qty').value || 0) - 1); syncRecord(); };
   $('plus').onclick = () => { $('qty').value = (+$('qty').value || 0) + 1; syncRecord(); };
-  $('qty').oninput = syncRecord;
+  $('qty').oninput = syncRecord; $('paid').oninput = syncRecord;
   const smallQty = () => (+$('qty').value || 0) * (unitBig ? cur.per : 1);
   function syncRecord() {
     document.querySelectorAll('[data-a]').forEach(b => b.setAttribute('aria-pressed', b.dataset.a === action));
@@ -202,11 +206,15 @@ input.txt{width:100%;font:inherit;padding:14px;border-radius:12px;border:1px sol
     const n = +$('qty').value || 0, u = unitBig ? cur.big : cur.unit;
     const words = { Took: 'I took', Returned: 'I brought back', Received: 'Received', Counted: 'Counted' }[action];
     $('save').textContent = `${words} ${n} ${plural(u, n)}`;
-    $('save').disabled = !(n > 0 || (action === 'Counted' && n === 0));
+    $('paidBox').hidden = action !== 'Took';
+    const paid = $('paid').value.replace(/[,\s]/g, '');
+    $('save').disabled = !(n > 0 || (action === 'Counted' && n === 0)) || (action === 'Took' && paid !== '' && !/^\d+$/.test(paid));
   }
   $('save').onclick = () => {
     const rec = { op: 'record', id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), who,
       product: cur.name, action, qty: smallQty(), note: $('note').value.trim(), time: new Date().toISOString() };
+    const paid = $('paid').value.replace(/[,\s]/g, '');
+    if (action === 'Took' && paid !== '') rec.amount = Number(paid);
     // update the local view straight away
     const p = S.products.find(x => x.name === cur.name);
     rec.change = action === 'Took' ? -rec.qty : action === 'Counted' ? rec.qty - p.balance : rec.qty;
@@ -214,7 +222,7 @@ input.txt{width:100%;font:inherit;padding:14px;border-radius:12px;border:1px sol
     store.set('state', S);
     queue.push(rec); store.set('queue', queue); lastId = rec.id;
     $('doneText').innerHTML = `${esc(who)} ${verb[action]} <b>${esc(qtyText(cur, rec.qty))}</b> of ${esc(cur.name)}`;
-    $('doneSub').textContent = `${cur.name} now: ${qtyText(cur, p.balance)}`;
+    $('doneSub').textContent = `${rec.amount != null ? `Paid KES ${rec.amount.toLocaleString()}. ` : ''}${cur.name} now: ${qtyText(cur, p.balance)}`;
     $('undoBtn').hidden = false; $('tick').hidden = false;
     show('done'); flush();
   };
