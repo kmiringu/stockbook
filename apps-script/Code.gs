@@ -12,7 +12,7 @@
 
 const TZ = 'Africa/Nairobi';
 const ACTIONS = ['Took', 'Returned', 'Received', 'Counted'];
-const MOVE_HEADERS = ['ID', 'Time', 'Who', 'Product', 'Action', 'Quantity', 'Change', 'Job / note', 'Status', 'Recorded at'];
+const MOVE_HEADERS = ['ID', 'Time', 'Who', 'Product', 'Action', 'Quantity', 'Change', 'Job / note', 'Status', 'Recorded at', 'Amount paid (KES)'];
 const PAGE_URL = 'https://kmiringu.github.io/stockbook/';
 
 // ---------- setup ----------
@@ -49,6 +49,7 @@ function setup() {
     'Leave "Big unit" empty if it is only handled singly. Set Active to "no" to hide a product.');
   sheet('People', ['Name', 'Active'], [['Your name', 'yes']]);
   sheet('Moves', MOVE_HEADERS, []);
+  ensureMoveColumns_();
   buildSummary_();
   updateStoreLink_();
 
@@ -57,10 +58,24 @@ function setup() {
 
 /** Run this once after pasting a new version of this file (it is safe to run again). */
 function updateTriggers() {
+  ensureMoveColumns_();
   ScriptApp.getProjectTriggers().forEach(t => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('dailyEmail').timeBased().everyDays(1).atHour(Number(settings_()['Daily email hour']) || 18).inTimezone(TZ).create();
   ScriptApp.newTrigger('weeklyEmail').timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(8).inTimezone(TZ).create();
   ScriptApp.newTrigger('onSettingsEdit').forSpreadsheet(SpreadsheetApp.getActive()).onEdit().create();
+}
+
+/** Adds columns introduced after a sheet was first set up (e.g. Amount paid). Safe to run again. */
+function ensureMoveColumns_() {
+  const sh = SpreadsheetApp.getActive().getSheetByName('Moves');
+  if (!sh) return;
+  const n = MOVE_HEADERS.length;
+  if (sh.getMaxColumns() < n) sh.insertColumnsAfter(sh.getMaxColumns(), n - sh.getMaxColumns());
+  const head = sh.getRange(1, 1, 1, n);
+  if (head.getValues()[0][n - 1] !== MOVE_HEADERS[n - 1]) {
+    head.setValues([MOVE_HEADERS]).setFontWeight('bold').setBackground('#f1efe8');
+    sh.getRange(2, n, Math.max(1, sh.getMaxRows() - 1), 1).setNumberFormat('#,##0');
+  }
 }
 
 function buildSummary_() {
@@ -130,6 +145,7 @@ function moves_() {
   return sh.getDataRange().getValues().slice(1).map((r, i) => ({
     row: i + 2, id: String(r[0]), time: r[1], who: r[2], product: r[3], action: r[4],
     qty: Number(r[5]), change: Number(r[6]), note: r[7], status: r[8],
+    amount: r[10] === '' || r[10] == null ? null : Number(r[10]),
   }));
 }
 
@@ -153,7 +169,7 @@ function state_() {
     people: people_(),
     products: products.map(p => Object.assign(p, { balance: bal[p.name], out: out[p.name] })),
     recent: moves.filter(m => m.status !== 'void').slice(-40).reverse()
-      .map(m => ({ id: m.id, time: fmt(m.time), who: m.who, product: m.product, action: m.action, qty: m.qty, change: m.change, note: m.note })),
+      .map(m => ({ id: m.id, time: fmt(m.time), who: m.who, product: m.product, action: m.action, qty: m.qty, change: m.change, note: m.note, amount: m.amount })),
   };
 }
 
@@ -194,6 +210,9 @@ function record_(p) {
   if (!(qty >= 0) || (qty === 0 && p.action !== 'Counted') || qty > 100000) return { ok: false, error: 'Check the amount' };
   // Offline phones resend the same record; the client-made ID makes that harmless.
   if (p.id && moves.some(m => m.id === String(p.id))) return { ok: true, duplicate: true, state: state_() };
+  // Amount paid is optional and only means something for stock taken out (a sale).
+  const amount = p.amount === '' || p.amount == null ? '' : Number(p.amount);
+  if (amount !== '' && (!(amount >= 0) || amount > 1e8 || p.action !== 'Took')) return { ok: false, error: 'Check the amount paid' };
 
   const { bal } = balances_(products, moves);
   const change = p.action === 'Took' ? -qty : p.action === 'Counted' ? qty - bal[prod.name] : qty;
@@ -201,8 +220,9 @@ function record_(p) {
   const now = new Date();
   if (isNaN(when) || when > now || now - when > 7 * 864e5) when = now;
   const id = String(p.id || Utilities.getUuid().slice(0, 8)).slice(0, 20);
+  ensureMoveColumns_();
   SpreadsheetApp.getActive().getSheetByName('Moves').appendRow(
-    [id, when, p.who, prod.name, p.action, qty, change, String(p.note || '').slice(0, 120), '', now]);
+    [id, when, p.who, prod.name, p.action, qty, change, String(p.note || '').slice(0, 120), '', now, amount]);
   return { ok: true, id, state: state_() };
 }
 
@@ -241,7 +261,15 @@ function moveLine_(m, byName) {
   const p = byName[m.product] || { unit: '' };
   const q = qtyText_(p, m.action === 'Counted' ? m.change : m.qty);
   return `<li>${m.time.slice(5, 10).split('-').reverse().join('/')} ${m.time.slice(11)}: ${m.who} ${verb[m.action]} ${q}` +
-    `${m.action === 'Counted' ? ' difference in' : ' of'} ${m.product}${m.note ? ` (${m.note})` : ''}</li>`;
+    `${m.action === 'Counted' ? ' difference in' : ' of'} ${m.product}${m.note ? ` (${m.note})` : ''}` +
+    `${m.amount != null ? `, paid KES ${m.amount.toLocaleString()}` : ''}</li>`;
+}
+
+function paidLine_(list) {
+  const paid = list.filter(m => m.amount != null);
+  if (!paid.length) return '';
+  const total = paid.reduce((t, m) => t + m.amount, 0);
+  return `<p style="font-size:18px">Money from sales: <b>KES ${total.toLocaleString()}</b> (${paid.length} sale${paid.length > 1 ? 's' : ''} with an amount recorded)</p>`;
 }
 
 function send_(subject, body) {
@@ -259,7 +287,7 @@ function dailyEmail() {
   if (!todays.length) return;
   const byName = Object.fromEntries(st.products.map(p => [p.name, p]));
   send_(`${st.store}: ${todays.length} movement${todays.length > 1 ? 's' : ''} today`,
-    `<h2 style="margin:0 0 8px">${st.store}</h2><h3>Today</h3><ul>${todays.map(m => moveLine_(m, byName)).join('')}</ul>` +
+    `<h2 style="margin:0 0 8px">${st.store}</h2>${paidLine_(todays)}<h3>Today</h3><ul>${todays.map(m => moveLine_(m, byName)).join('')}</ul>` +
     `<h3>In the store now</h3><table cellpadding="6" style="border-collapse:collapse">${stockRows_(st)}</table>`);
 }
 
@@ -280,7 +308,7 @@ function weeklyEmail() {
   const missing = st.products.filter(p => !p.hasOpening || !p.price).map(p => p.name);
   send_(`${st.store}: weekly stock report`,
     `<h2 style="margin:0 0 8px">${st.store}: this week</h2>` +
-    `<p style="font-size:18px">Stock value in the store: <b>KES ${Math.round(value).toLocaleString()}</b></p>` +
+    `<p style="font-size:18px">Stock value in the store: <b>KES ${Math.round(value).toLocaleString()}</b></p>` + paidLine_(week) +
     `<h3>In the store now</h3><table cellpadding="6" style="border-collapse:collapse">${stockRows_(st)}</table>` +
     `<h3>How fast it's moving</h3><ul>${idle}</ul>` +
     `<h3>Movements in the last 7 days (${week.length})</h3><ul>${week.length ? week.map(m => moveLine_(m, byName)).join('') : '<li>None.</li>'}</ul>` +
