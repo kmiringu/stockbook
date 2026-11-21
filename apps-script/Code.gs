@@ -8,11 +8,20 @@
  *   4. Open the Settings tab of the sheet: copy the Web app URL into "Web app URL".
  *      The "Store link" cell then holds the link for the QR code.
  * Products, people and the owner's email are edited in the sheet, not here.
+ *
+ * Actions in the Moves tab:
+ *   Sold      sold straight from the store and paid now        store −qty, money in
+ *   Took      taken out to sell (or for a job), paid later       store −qty, the person holds it
+ *   Paid      money handed in for stock the person was holding   store unchanged, holding −qty (qty may be 0)
+ *   Returned  unsold stock brought back                          store +qty, holding −qty
+ *   Received  new delivery                                       store +qty
+ *   Counted   stock count                                        store set to the count
+ * A "Took" row with money on it (older records) counts as a sale.
  */
 
 const TZ = 'Africa/Nairobi';
-const ACTIONS = ['Took', 'Returned', 'Received', 'Counted'];
-const MOVE_HEADERS = ['ID', 'Time', 'Who', 'Product', 'Action', 'Quantity', 'Change', 'Job / note', 'Status', 'Recorded at', 'Amount paid (KES)'];
+const ACTIONS = ['Sold', 'Took', 'Paid', 'Returned', 'Received', 'Counted'];
+const MOVE_HEADERS = ['ID', 'Time', 'Who', 'Product', 'Action', 'Quantity', 'Change', 'Job / note', 'Status', 'Recorded at', 'Money in (KES)'];
 const PAGE_URL = 'https://kmiringu.github.io/stockbook/';
 
 // ---------- setup ----------
@@ -46,26 +55,26 @@ function setup() {
   ]);
   prod.getRange('A2:G3').setBackground('#fff4c2');
   prod.getRange('A1').setNote('Yellow cells: replace the examples with your products, packing, opening count and prices. ' +
-    'Leave "Big unit" empty if it is only handled singly. Set Active to "no" to hide a product.');
+    'Leave "Big unit" empty if it is only handled singly. A product appears on the phone page once its opening stock is filled in. ' +
+    'Set Active to "no" to hide it.');
   sheet('People', ['Name', 'Active'], [['Your name', 'yes']]);
   sheet('Moves', MOVE_HEADERS, []);
-  ensureMoveColumns_();
-  buildSummary_();
-  updateStoreLink_();
-
   updateTriggers();
+  updateStoreLink_();
 }
 
 /** Run this once after pasting a new version of this file (it is safe to run again). */
 function updateTriggers() {
   ensureMoveColumns_();
+  buildSummary_();
+  writePeople_(state_());
   ScriptApp.getProjectTriggers().forEach(t => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('dailyEmail').timeBased().everyDays(1).atHour(Number(settings_()['Daily email hour']) || 18).inTimezone(TZ).create();
   ScriptApp.newTrigger('weeklyEmail').timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(8).inTimezone(TZ).create();
   ScriptApp.newTrigger('onSettingsEdit').forSpreadsheet(SpreadsheetApp.getActive()).onEdit().create();
 }
 
-/** Adds columns introduced after a sheet was first set up (e.g. Amount paid). Safe to run again. */
+/** Adds or renames columns introduced after a sheet was first set up. Safe to run again. */
 function ensureMoveColumns_() {
   const sh = SpreadsheetApp.getActive().getSheetByName('Moves');
   if (!sh) return;
@@ -78,30 +87,54 @@ function ensureMoveColumns_() {
   }
 }
 
+/** Summary tab: stock per product (formulas, columns A–G) and who is holding stock (values, columns I–N). */
 function buildSummary_() {
   const ss = SpreadsheetApp.getActive();
   let sh = ss.getSheetByName('Summary');
   if (!sh) sh = ss.insertSheet('Summary', 0);
   sh.clear();
-  const h = ['Product', 'In store (small units)', 'In store', 'Taken out so far', 'Value', 'Status'];
+  const h = ['Product', 'In store (small units)', 'In store', 'Sold so far', 'Money in (KES)', 'Stock value (KES)', 'Status'];
   sh.getRange(1, 1, 1, h.length).setValues([h]).setFontWeight('bold').setBackground('#f1efe8');
   sh.setFrozenRows(1);
+  const live = '"<>void"';
   const f = [];
   for (let r = 2; r <= 30; r++) {
     const P = `Products!A${r}`;
-    const bal = `(N(Products!E${r})+SUMIFS(Moves!G:G,Moves!D:D,${P},Moves!I:I,"<>void"))`;
+    const show = `AND(${P}<>"",Products!E${r}<>"",LOWER(Products!H${r})<>"no")`;
+    const bal = `(N(Products!E${r})+SUMIFS(Moves!G:G,Moves!D:D,${P},Moves!I:I,${live}))`;
+    const sold = `(SUMIFS(Moves!F:F,Moves!D:D,${P},Moves!E:E,"Sold",Moves!I:I,${live})` +
+      `+SUMIFS(Moves!F:F,Moves!D:D,${P},Moves!E:E,"Paid",Moves!I:I,${live})` +
+      `+SUMIFS(Moves!F:F,Moves!D:D,${P},Moves!E:E,"Took",Moves!K:K,"<>",Moves!I:I,${live}))`;
+    const words = x => `IF(N(Products!D${r})>1,INT(${x}/Products!D${r})&" "&Products!C${r}&IF(MOD(${x},Products!D${r})>0," + "&MOD(${x},Products!D${r})&" "&Products!B${r},""),${x}&" "&Products!B${r})`;
     f.push([
-      `=IF(${P}="","",${P})`,
-      `=IF(${P}="","",${bal})`,
-      `=IF(${P}="","",IF(N(Products!D${r})>1,INT(${bal}/Products!D${r})&" "&Products!C${r}&IF(MOD(${bal},Products!D${r})>0," + "&MOD(${bal},Products!D${r})&" "&Products!B${r},""),${bal}&" "&Products!B${r}))`,
-      `=IF(${P}="","",-SUMIFS(Moves!G:G,Moves!D:D,${P},Moves!E:E,"Took",Moves!I:I,"<>void")&" "&Products!B${r})`,
-      `=IF(${P}="","",${bal}*N(Products!G${r}))`,
-      `=IF(${P}="","",IF(N(Products!E${r})=0,"Opening count missing",IF(${bal}<=N(Products!F${r}),"Reorder","OK")))`,
+      `=IF(${show},${P},"")`,
+      `=IF(${show},${bal},"")`,
+      `=IF(${show},${words(bal)},"")`,
+      `=IF(${show},${words(sold)},"")`,
+      `=IF(${show},SUMIFS(Moves!K:K,Moves!D:D,${P},Moves!I:I,${live}),"")`,
+      `=IF(${show},${bal}*N(Products!G${r}),"")`,
+      `=IF(${show},IF(${bal}<=N(Products!F${r}),"Reorder","OK"),"")`,
     ]);
   }
   sh.getRange(2, 1, f.length, h.length).setFormulas(f);
-  sh.getRange('E2:E30').setNumberFormat('#,##0');
+  sh.getRange('E2:F30').setNumberFormat('#,##0');
   sh.autoResizeColumns(1, h.length);
+}
+
+/** Rewrites the "With people" table on the Summary tab. */
+function writePeople_(st) {
+  const sh = SpreadsheetApp.getActive().getSheetByName('Summary');
+  if (!sh) return;
+  const byName = Object.fromEntries(st.products.map(p => [p.name, p]));
+  const h = ['With people', 'Product', 'Holding now', 'Taken to sell', 'Sold (handed in)', 'Brought back', 'Money handed in (KES)'];
+  sh.getRange(1, 9, 200, h.length).clearContent();
+  sh.getRange(1, 9, 1, h.length).setValues([h]).setFontWeight('bold').setBackground('#f1efe8');
+  const rows = st.holdings.map(g => {
+    const p = byName[g.product] || { unit: '' };
+    return [g.who, g.product, g.holding ? qtyText_(p, g.holding) : 'nothing', qtyText_(p, g.took), qtyText_(p, g.sold), qtyText_(p, g.returned), g.money];
+  });
+  if (rows.length) sh.getRange(2, 9, rows.length, h.length).setValues(rows);
+  sh.getRange(2, 15, 199, 1).setNumberFormat('#,##0');
 }
 
 function onSettingsEdit(e) {
@@ -125,6 +158,7 @@ function settings_() {
   return Object.fromEntries(rows.map(r => [String(r[0]).trim(), r[1]]));
 }
 
+/** Active products. Products without an opening count are kept for checks but hidden from the page and emails. */
 function products_() {
   return SpreadsheetApp.getActive().getSheetByName('Products').getDataRange().getValues().slice(1)
     .filter(r => r[0] && String(r[7]).toLowerCase() !== 'no')
@@ -149,26 +183,47 @@ function moves_() {
   }));
 }
 
+const isSale_ = m => m.action === 'Sold' || m.action === 'Paid' || (m.action === 'Took' && m.amount != null);
+
 function balances_(products, moves) {
-  const bal = {}, out = {};
-  products.forEach(p => { bal[p.name] = p.opening; out[p.name] = 0; });
+  const bal = {}, sold = {}, money = {};
+  products.forEach(p => { bal[p.name] = p.opening; sold[p.name] = 0; money[p.name] = 0; });
   moves.forEach(m => {
     if (m.status === 'void' || !(m.product in bal)) return;
     bal[m.product] += m.change;
-    if (m.action === 'Took') out[m.product] += m.qty;
+    if (isSale_(m)) sold[m.product] += m.qty;
+    money[m.product] += m.amount || 0;
   });
-  return { bal, out };
+  return { bal, sold, money };
+}
+
+/** Stock each person has taken out to sell, and what they have settled. */
+function holdings_(moves) {
+  const h = {};
+  moves.forEach(m => {
+    if (m.status === 'void') return;
+    const k = m.who + '|' + m.product;
+    const g = h[k] || (h[k] = { who: m.who, product: m.product, took: 0, sold: 0, returned: 0, money: 0 });
+    if (m.action === 'Took' && m.amount == null) g.took += m.qty;
+    else if (m.action === 'Paid') { g.sold += m.qty; g.money += m.amount || 0; }
+    else if (m.action === 'Returned') g.returned += m.qty;
+  });
+  return Object.values(h).filter(g => g.took > 0)
+    .map(g => Object.assign(g, { holding: Math.max(0, g.took - g.sold - g.returned) }));
 }
 
 function state_() {
-  const s = settings_(), products = products_(), moves = moves_();
-  const { bal, out } = balances_(products, moves);
+  const s = settings_(), all = products_(), moves = moves_();
+  const products = all.filter(p => p.hasOpening);
+  const shown = new Set(products.map(p => p.name));
+  const { bal, sold, money } = balances_(products, moves);
   const fmt = d => Utilities.formatDate(new Date(d), TZ, "yyyy-MM-dd'T'HH:mm");
   return {
     store: s['Store name'] || 'Store',
     people: people_(),
-    products: products.map(p => Object.assign(p, { balance: bal[p.name], out: out[p.name] })),
-    recent: moves.filter(m => m.status !== 'void').slice(-40).reverse()
+    products: products.map(p => Object.assign(p, { balance: bal[p.name], sold: sold[p.name], money: money[p.name] })),
+    holdings: holdings_(moves).filter(g => shown.has(g.product)),
+    recent: moves.filter(m => m.status !== 'void' && shown.has(m.product)).slice(-40).reverse()
       .map(m => ({ id: m.id, time: fmt(m.time), who: m.who, product: m.product, action: m.action, qty: m.qty, change: m.change, note: m.note, amount: m.amount })),
   };
 }
@@ -204,26 +259,29 @@ function record_(p) {
   const products = products_(), moves = moves_();
   const prod = products.find(x => x.name === p.product);
   const qty = Number(p.qty);
+  const amount = p.amount === '' || p.amount == null ? null : Number(p.amount);
   if (!prod) return { ok: false, error: 'Unknown product' };
   if (!people_().includes(p.who)) return { ok: false, error: 'Unknown name' };
   if (!ACTIONS.includes(p.action)) return { ok: false, error: 'Unknown action' };
-  if (!(qty >= 0) || (qty === 0 && p.action !== 'Counted') || qty > 100000) return { ok: false, error: 'Check the amount' };
+  const zeroOk = p.action === 'Counted' || p.action === 'Paid';
+  if (!(qty >= 0) || (qty === 0 && !zeroOk) || qty > 100000) return { ok: false, error: 'Check the amount' };
+  if (amount !== null && (!(amount >= 0) || amount > 1e8 || !['Sold', 'Paid', 'Took'].includes(p.action))) return { ok: false, error: 'Check the money' };
+  if ((p.action === 'Sold' || p.action === 'Paid') && !(amount > 0)) return { ok: false, error: 'Enter the money received' };
   // Offline phones resend the same record; the client-made ID makes that harmless.
   if (p.id && moves.some(m => m.id === String(p.id))) return { ok: true, duplicate: true, state: state_() };
-  // Amount paid is optional and only means something for stock taken out (a sale).
-  const amount = p.amount === '' || p.amount == null ? '' : Number(p.amount);
-  if (amount !== '' && (!(amount >= 0) || amount > 1e8 || p.action !== 'Took')) return { ok: false, error: 'Check the amount paid' };
 
   const { bal } = balances_(products, moves);
-  const change = p.action === 'Took' ? -qty : p.action === 'Counted' ? qty - bal[prod.name] : qty;
+  const change = { Sold: -qty, Took: -qty, Paid: 0, Returned: qty, Received: qty, Counted: qty - bal[prod.name] }[p.action];
   let when = new Date(p.time);
   const now = new Date();
   if (isNaN(when) || when > now || now - when > 7 * 864e5) when = now;
   const id = String(p.id || Utilities.getUuid().slice(0, 8)).slice(0, 20);
   ensureMoveColumns_();
   SpreadsheetApp.getActive().getSheetByName('Moves').appendRow(
-    [id, when, p.who, prod.name, p.action, qty, change, String(p.note || '').slice(0, 120), '', now, amount]);
-  return { ok: true, id, state: state_() };
+    [id, when, p.who, prod.name, p.action, qty, change, String(p.note || '').slice(0, 120), '', now, amount === null ? '' : amount]);
+  const st = state_();
+  writePeople_(st);
+  return { ok: true, id, state: st };
 }
 
 function undo_(p) {
@@ -234,13 +292,16 @@ function undo_(p) {
   const recordedAt = sh.getRange(m.row, 10).getValue();
   if (new Date() - new Date(recordedAt) > 30 * 60 * 1000) return { ok: false, error: 'Too late to undo. Ask the storekeeper.' };
   sh.getRange(m.row, 9).setValue('void');
-  return { ok: true, state: state_() };
+  const st = state_();
+  writePeople_(st);
+  return { ok: true, state: st };
 }
 
-// ---------- daily email to the owner ----------
+// ---------- emails to the owner ----------
 
 function qtyText_(p, n) {
   const a = Math.abs(n), plural = (w, k) => (k === 1 ? w : w + (/(x|s|ch|sh)$/.test(w) ? 'es' : 's'));
+  if (a === 0 && p.big && p.per > 1) return `0 ${plural(p.big, 0)}`;
   if (p.big && p.per > 1 && a >= p.per) {
     const whole = Math.floor(a / p.per), part = a - whole * p.per;
     return `${whole.toLocaleString()} ${plural(p.big, whole)}` + (part ? ` and ${part} ${plural(p.unit, part)}` : '');
@@ -248,28 +309,43 @@ function qtyText_(p, n) {
   return `${a.toLocaleString()} ${plural(p.unit, a)}`;
 }
 
+const kes_ = n => `KES ${Math.round(n).toLocaleString()}`;
+
 function stockRows_(st) {
   return st.products.map(p => {
-    const status = !p.hasOpening ? ['Opening count missing', '#92400e'] : p.balance <= p.reorder ? ['Reorder', '#b91c1c'] : ['OK', '#15803d'];
-    return `<tr><td>${p.name}</td><td style="text-align:right"><b>${p.hasOpening ? qtyText_(p, p.balance) : '–'}</b></td>` +
+    const status = p.balance <= p.reorder ? ['Reorder', '#b91c1c'] : ['OK', '#15803d'];
+    return `<tr><td>${p.name}</td><td style="text-align:right"><b>${qtyText_(p, p.balance)}</b></td>` +
       `<td style="color:${status[1]}">${status[0]}</td></tr>`;
   }).join('');
 }
 
-function moveLine_(m, byName) {
-  const verb = { Took: 'took', Returned: 'returned', Received: 'received', Counted: 'counted' };
-  const p = byName[m.product] || { unit: '' };
-  const q = qtyText_(p, m.action === 'Counted' ? m.change : m.qty);
-  return `<li>${m.time.slice(5, 10).split('-').reverse().join('/')} ${m.time.slice(11)}: ${m.who} ${verb[m.action]} ${q}` +
-    `${m.action === 'Counted' ? ' difference in' : ' of'} ${m.product}${m.note ? ` (${m.note})` : ''}` +
-    `${m.amount != null ? `, paid KES ${m.amount.toLocaleString()}` : ''}</li>`;
+function peopleBlock_(st) {
+  const byName = Object.fromEntries(st.products.map(p => [p.name, p]));
+  const out = st.holdings.filter(g => g.holding > 0);
+  if (!out.length) return '<h3>With people</h3><p>Nobody is holding stock.</p>';
+  return '<h3>With people (taken to sell, not yet settled)</h3><ul>' + out.map(g =>
+    `<li><b>${g.who}</b> is holding ${qtyText_(byName[g.product], g.holding)} of ${g.product}` +
+    ` (handed in so far: ${kes_(g.money)})</li>`).join('') + '</ul>';
 }
 
-function paidLine_(list) {
-  const paid = list.filter(m => m.amount != null);
-  if (!paid.length) return '';
-  const total = paid.reduce((t, m) => t + m.amount, 0);
-  return `<p style="font-size:18px">Money from sales: <b>KES ${total.toLocaleString()}</b> (${paid.length} sale${paid.length > 1 ? 's' : ''} with an amount recorded)</p>`;
+function moveLine_(m, byName) {
+  const p = byName[m.product] || { unit: '' };
+  const q = qtyText_(p, m.action === 'Counted' ? m.change : m.qty);
+  const money = m.amount != null ? kes_(m.amount) : '';
+  const what = {
+    Sold: `sold ${q} of ${m.product} for ${money}`,
+    Took: `took ${q} of ${m.product}` + (money ? ` and paid ${money}` : ' to sell'),
+    Paid: `handed in ${money}` + (m.qty ? ` for ${q} sold` : ''),
+    Returned: `brought back ${q} of ${m.product}`,
+    Received: `received ${q} of ${m.product}`,
+    Counted: `counted ${m.product}: ${m.change >= 0 ? '+' : '−'}${q} difference`,
+  }[m.action] || `${m.action} ${q}`;
+  return `<li>${m.time.slice(5, 10).split('-').reverse().join('/')} ${m.time.slice(11)}: ${m.who} ${what}${m.note ? ` (${m.note})` : ''}</li>`;
+}
+
+function moneyLine_(list) {
+  const total = list.reduce((t, m) => t + (m.amount || 0), 0);
+  return total ? `<p style="font-size:18px">Money in: <b>${kes_(total)}</b></p>` : '';
 }
 
 function send_(subject, body) {
@@ -279,38 +355,40 @@ function send_(subject, body) {
     `<p style="color:#666">The full record is in the Google Sheet.</p></div>` });
 }
 
-/** Evening email: only on days when stock actually moved. */
+/** Evening email: only on days when stock moved or money came in. */
 function dailyEmail() {
   const st = state_();
   const today = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
   const todays = st.recent.filter(m => m.time.startsWith(today)).reverse();
   if (!todays.length) return;
   const byName = Object.fromEntries(st.products.map(p => [p.name, p]));
-  send_(`${st.store}: ${todays.length} movement${todays.length > 1 ? 's' : ''} today`,
-    `<h2 style="margin:0 0 8px">${st.store}</h2>${paidLine_(todays)}<h3>Today</h3><ul>${todays.map(m => moveLine_(m, byName)).join('')}</ul>` +
-    `<h3>In the store now</h3><table cellpadding="6" style="border-collapse:collapse">${stockRows_(st)}</table>`);
+  send_(`${st.store}: ${todays.length} record${todays.length > 1 ? 's' : ''} today`,
+    `<h2 style="margin:0 0 8px">${st.store}</h2>${moneyLine_(todays)}<h3>Today</h3><ul>${todays.map(m => moveLine_(m, byName)).join('')}</ul>` +
+    `<h3>In the store now</h3><table cellpadding="6" style="border-collapse:collapse">${stockRows_(st)}</table>` + peopleBlock_(st));
 }
 
-/** Monday morning: the week in one email, with money sitting in stock and slow movers. */
+/** Monday morning: the week in one email. */
 function weeklyEmail() {
   const st = state_();
   const byName = Object.fromEntries(st.products.map(p => [p.name, p]));
   const weekAgo = Utilities.formatDate(new Date(Date.now() - 7 * 864e5), TZ, "yyyy-MM-dd'T'HH:mm");
-  const all = moves_().filter(m => m.status !== 'void');
-  const week = st.recent.filter(m => m.time >= weekAgo).reverse();
+  const fmt = d => Utilities.formatDate(new Date(d), TZ, "yyyy-MM-dd'T'HH:mm");
+  const all = moves_().filter(m => m.status !== 'void' && byName[m.product]);
+  const week = all.filter(m => fmt(m.time) >= weekAgo).map(m => Object.assign({}, m, { time: fmt(m.time) }));
   const value = st.products.reduce((t, p) => t + Math.max(0, p.balance) * p.price, 0);
-  const idle = st.products.filter(p => p.hasOpening).map(p => {
-    const last = all.filter(m => m.product === p.name && m.action === 'Took').pop();
+  const pace = st.products.map(p => {
+    const last = all.filter(m => m.product === p.name && isSale_(m)).pop();
     const days = last ? Math.floor((Date.now() - new Date(last.time)) / 864e5) : null;
-    return `<li>${p.name}: ${days === null ? 'nothing taken out yet' : days === 0 ? 'moved today' : `last taken out ${days} day${days > 1 ? 's' : ''} ago`}` +
-      ` · taken out so far ${qtyText_(p, p.out)}</li>`;
+    return `<li>${p.name}: sold so far ${qtyText_(p, p.sold)} for ${kes_(p.money)} · ` +
+      `${days === null ? 'no sales yet' : days === 0 ? 'last sale today' : `last sale ${days} day${days > 1 ? 's' : ''} ago`}</li>`;
   }).join('');
-  const missing = st.products.filter(p => !p.hasOpening || !p.price).map(p => p.name);
-  send_(`${st.store}: weekly stock report`,
-    `<h2 style="margin:0 0 8px">${st.store}: this week</h2>` +
-    `<p style="font-size:18px">Stock value in the store: <b>KES ${Math.round(value).toLocaleString()}</b></p>` + paidLine_(week) +
+  const noPrice = st.products.filter(p => !p.price).map(p => p.name);
+  send_(`${st.store}: weekly report`,
+    `<h2 style="margin:0 0 8px">${st.store}: this week</h2>` + moneyLine_(week) +
+    `<p>Stock value in the store: <b>${kes_(value)}</b></p>` +
     `<h3>In the store now</h3><table cellpadding="6" style="border-collapse:collapse">${stockRows_(st)}</table>` +
-    `<h3>How fast it's moving</h3><ul>${idle}</ul>` +
-    `<h3>Movements in the last 7 days (${week.length})</h3><ul>${week.length ? week.map(m => moveLine_(m, byName)).join('') : '<li>None.</li>'}</ul>` +
-    (missing.length ? `<p style="color:#92400e">Opening count or price missing for: ${missing.join(', ')}.</p>` : ''));
+    peopleBlock_(st) +
+    `<h3>Sales</h3><ul>${pace}</ul>` +
+    `<h3>Records in the last 7 days (${week.length})</h3><ul>${week.length ? week.map(m => moveLine_(m, byName)).join('') : '<li>None.</li>'}</ul>` +
+    (noPrice.length ? `<p style="color:#92400e">Price missing for: ${noPrice.join(', ')}.</p>` : ''));
 }

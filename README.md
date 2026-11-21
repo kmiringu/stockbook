@@ -14,6 +14,8 @@ Built for Fundi Kanga, Gikambura.
                                                         └─► emails to the owner
 ```
 
+- **Sales and money.** Every sale records the money received. Stock taken out to sell stays against the person's name until they hand in the money or bring it back, so you can always see who is holding what.
+- **Only products in use.** A product shows on the page once its opening stock is filled in on the Products tab.
 - **Nothing to remember.** Tap your name (the phone remembers it), tap the product, set the amount with + / −, then tap Record. Big and small units (for example boxes and packets) are both buttons.
 - **Works with weak signal.** Records are kept on the phone and sent automatically once the network returns, with the time the stock was actually taken.
 - **Mistakes can be undone** by the same person within 30 minutes. Nothing is deleted; the record is marked `void` in the sheet.
@@ -37,8 +39,9 @@ When `Code.gs` changes, paste the new version, save and run **`updateTriggers`**
 
 | Who | What |
 |---|---|
-| Anyone taking stock | Scan → name → product → amount → Record. About 10 seconds. |
-| Anyone returning stock | Same steps, but tap "I brought back". |
+| Selling from the store | Scan → **Sold** → how many → money received → Record. |
+| Taking stock out to sell | **Taking to sell** → how many. The page and the Summary tab then show them as holding it. |
+| Settling up | **Handing in money** → how many were sold (0 if only paying) → money. Then **Bringing back** for unsold stock. |
 | Storekeeper | Records new deliveries. Does a **stock count** every week (tap "New delivery or stock count…"), which catches anything not recorded. |
 | Owner | Reads the emails and opens the sheet's **Summary** tab whenever needed. |
 
