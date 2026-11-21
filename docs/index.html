@@ -4,49 +4,66 @@
 <meta name="theme-color" content="#1c1c1a">
 <title>Store Stock</title>
 <style>
-:root{--bg:#f6f5f1;--fg:#1c1c1a;--mut:#67665f;--card:#fff;--line:#e3e1d8;--acc:#c2410c;--accfg:#fff;--ok:#15803d;--okbg:#dcfce7;--bad:#b91c1c;--badbg:#fee2e2;--sel:#1c1c1a;--selfg:#fff}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141412;--fg:#ecebe6;--mut:#a3a29a;--card:#1e1e1b;--line:#34332e;--acc:#fb923c;--accfg:#1c1c1a;--ok:#4ade80;--okbg:#14532d;--bad:#fca5a5;--badbg:#7f1d1d;--sel:#ecebe6;--selfg:#141412}}
+:root{--bg:#f6f5f1;--fg:#1c1c1a;--mut:#67665f;--card:#fff;--line:#e3e1d8;--acc:#c2410c;--accfg:#fff;--ok:#15803d;--okbg:#dcfce7;--bad:#b91c1c;--badbg:#fee2e2;--warn:#92400e;--warnbg:#fef3c7;--sel:#1c1c1a;--selfg:#fff;--hero:#1c1c1a;--herofg:#fff;--heromut:#c9c7bd}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141412;--fg:#ecebe6;--mut:#a3a29a;--card:#1e1e1b;--line:#34332e;--acc:#fb923c;--accfg:#1c1c1a;--ok:#4ade80;--okbg:#14532d;--bad:#fca5a5;--badbg:#7f1d1d;--warn:#fcd34d;--warnbg:#451a03;--sel:#ecebe6;--selfg:#141412;--hero:#26251f;--herofg:#ecebe6;--heromut:#a3a29a}}
 [hidden]{display:none!important}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
-main{max-width:560px;margin:auto;padding:16px 16px 48px}
-header{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px}
-h1{font-size:1.25rem;margin:0}h2{font-size:1.05rem;margin:24px 0 10px}
+main{max-width:560px;margin:auto;padding:14px 16px 48px}
+header{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}
+h1{font-size:1rem;margin:0;color:var(--mut);font-weight:650;letter-spacing:.02em}
+h2{font-size:1.05rem;margin:26px 0 10px}
 .mut{color:var(--mut)}.small{font-size:.85rem}
 button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
-.link{color:var(--mut);text-decoration:underline;font-size:.9rem;padding:6px 0}
+.link{color:var(--mut);text-decoration:underline;font-size:.9rem;padding:8px 0}
+.chip{background:var(--card);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:.85rem;font-weight:600}
 .banner{background:var(--badbg);color:var(--bad);padding:10px 14px;border-radius:12px;font-size:.9rem;margin:8px 0}
 .banner.info{background:var(--card);color:var(--mut);border:1px solid var(--line)}
-.prod{display:flex;width:100%;text-align:left;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:10px}
-.prod:active{transform:scale(.99)}
-.prod .nm{font-weight:650}.prod .bal{font-size:1.35rem;font-weight:750}.prod .go{margin-left:auto;font-size:1.6rem;color:var(--mut)}
-.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--ok);margin-right:6px}.dot.low{background:var(--bad)}.dot.none{background:var(--mut)}
+.banner.warn{background:var(--warnbg);color:var(--warn)}
+.hero{display:block;width:100%;text-align:left;background:var(--hero);color:var(--herofg);border-radius:20px;padding:18px 18px 16px;margin-bottom:12px}
+.hero .nm{font-weight:650;color:var(--heromut);font-size:.95rem}
+.hero .bal{font-size:2.2rem;font-weight:800;line-height:1.15;margin:4px 0 2px}
+.hero .sub{font-size:.9rem;color:var(--heromut)}
+.hero .row{display:flex;gap:18px;margin-top:12px;padding-top:12px;border-top:1px solid rgba(255,255,255,.14)}
+.hero .row b{display:block;font-size:1.1rem;color:var(--herofg)}
+.hero .go{display:block;margin-top:14px;background:var(--acc);color:var(--accfg);border-radius:14px;padding:14px;text-align:center;font-weight:700;font-size:1.05rem}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#4ade80;margin-right:6px}.dot.low{background:#f87171}
 ul.feed{list-style:none;margin:0;padding:0;background:var(--card);border:1px solid var(--line);border-radius:16px;overflow:hidden}
-.feed li{padding:10px 14px;border-bottom:1px solid var(--line);font-size:.95rem}.feed li:last-child{border:0}
+.feed li{padding:11px 14px;border-bottom:1px solid var(--line);font-size:.95rem}.feed li:last-child{border:0}
 .feed .t{color:var(--mut);font-size:.8rem;display:block}
+.feed .money{font-weight:700;color:var(--ok)}
+.hold{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.hold b{font-size:1.05rem}
+.stat{display:flex;justify-content:space-between;align-items:baseline;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:10px}
+.stat b{font-size:1.4rem;color:var(--ok)}
 .screen{display:none}.screen.on{display:block}
+.acts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:12px 0 4px}
+.acts button{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;text-align:left;font-weight:700;font-size:1rem;line-height:1.25}
+.acts button span{display:block;font-weight:400;font-size:.8rem;color:var(--mut);margin-top:2px}
+.acts button[aria-pressed="true"]{background:var(--sel);color:var(--selfg);border-color:var(--sel)}
+.acts button[aria-pressed="true"] span{color:inherit;opacity:.75}
 .seg{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:8px 0}
-.seg.four{grid-template-columns:repeat(4,1fr)}
-.seg button{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 6px;font-weight:600;font-size:.95rem}
+.seg button{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 6px;font-weight:600;font-size:.95rem}
 .seg button[aria-pressed="true"]{background:var(--sel);color:var(--selfg);border-color:var(--sel)}
-.qty{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:10px;margin:8px 0}
-.qty button{width:64px;height:64px;border-radius:14px;background:var(--bg);border:1px solid var(--line);font-size:2rem;font-weight:600}
-.qty input{width:100%;text-align:center;font:inherit;font-size:2.4rem;font-weight:750;border:0;background:none;color:var(--fg)}
-label{display:block;font-size:.9rem;color:var(--mut);margin-top:14px}
+.qty{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:10px;margin:6px 0}
+.qty button{width:60px;height:60px;flex:none;border-radius:14px;background:var(--bg);border:1px solid var(--line);font-size:2rem;font-weight:600}
+.qty input{width:100%;min-width:0;text-align:center;font:inherit;font-size:2.3rem;font-weight:750;border:0;background:none;color:var(--fg)}
+label{display:block;font-size:.95rem;font-weight:650;margin-top:16px}
 input.txt{width:100%;font:inherit;padding:14px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--fg);margin-top:6px}
-.primary{display:block;width:100%;margin-top:20px;background:var(--acc);color:var(--accfg);border-radius:16px;padding:18px;font-size:1.15rem;font-weight:700}
-.primary:disabled{opacity:.5}
+input.money{font-size:1.5rem;font-weight:750}
+.primary{display:block;width:100%;margin-top:20px;background:var(--acc);color:var(--accfg);border-radius:16px;padding:18px;font-size:1.1rem;font-weight:700}
+.primary:disabled{opacity:.45}
 .secondary{display:block;width:100%;margin-top:10px;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;font-weight:600}
 .names{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
 .names button{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 8px;font-weight:650}
-.done{text-align:center;padding-top:32px}.done .tick{font-size:4rem;line-height:1;color:var(--ok)}
+.done{text-align:center;padding-top:28px}.done .tick{font-size:4rem;line-height:1;color:var(--ok)}
 .done p{font-size:1.2rem}
 #qr{display:flex;justify-content:center;padding:16px;background:#fff;border-radius:16px;margin:12px 0}
 .center{text-align:center}
 </style></head>
 <body><main>
 
-<header><h1 id="store">Store stock</h1><button class="link" id="whoBtn" hidden></button></header>
+<header><h1 id="store">Store stock</h1><button class="chip" id="whoBtn" hidden></button></header>
 <div id="banner"></div>
 
 <section class="screen" id="s-nokey">
@@ -61,9 +78,12 @@ input.txt{width:100%;font:inherit;padding:14px;border-radius:12px;border:1px sol
 </section>
 
 <section class="screen" id="s-home">
-  <h2>Tap what you took or brought</h2>
   <div id="products"></div>
-  <h2>Recent</h2>
+  <div id="mine"></div>
+  <h2>With people</h2>
+  <ul class="feed" id="people"></ul>
+  <h2>Today</h2>
+  <div class="stat"><span>Money in today</span><b id="todayMoney">KES 0</b></div>
   <ul class="feed" id="feed"></ul>
   <button class="secondary" id="copyBtn">Copy summary for WhatsApp</button>
   <button class="link" id="qrBtn">QR code for the store door</button>
@@ -71,29 +91,33 @@ input.txt{width:100%;font:inherit;padding:14px;border-radius:12px;border:1px sol
 
 <section class="screen" id="s-record">
   <button class="link" data-go="home">← Back</button>
-  <h2 id="rProd" style="margin-top:6px"></h2>
+  <h2 id="rProd" style="margin:4px 0 0"></h2>
   <div class="mut small" id="rBal"></div>
-  <div class="seg" id="actions">
-    <button data-a="Took" aria-pressed="true">I took</button>
-    <button data-a="Returned">I brought back</button>
+  <div class="acts" id="actions">
+    <button data-a="Sold">Sold<span>customer paid now</span></button>
+    <button data-a="Took">Taking to sell<span>will pay later</span></button>
+    <button data-a="Paid">Handing in money<span>for stock I took</span></button>
+    <button data-a="Returned">Bringing back<span>unsold stock</span></button>
   </div>
   <button class="link" id="moreBtn">New delivery or stock count…</button>
-  <div class="seg" id="more" hidden>
-    <button data-a="Received">New delivery</button>
-    <button data-a="Counted">Stock count</button>
+  <div class="acts" id="more" hidden>
+    <button data-a="Received">New delivery<span>stock arrived</span></button>
+    <button data-a="Counted">Stock count<span>what's in the store</span></button>
   </div>
+  <div id="hint"></div>
+  <label for="qty" id="qtyLbl">How many?</label>
   <div class="qty">
     <button id="minus" aria-label="Less">−</button>
-    <input id="qty" inputmode="numeric" value="1" aria-label="Amount">
+    <input id="qty" inputmode="numeric" value="1">
     <button id="plus" aria-label="More">+</button>
   </div>
   <div class="seg" id="units"></div>
-  <div id="paidBox">
-    <label for="paid">Amount paid, KES (if sold)</label>
-    <input class="txt" id="paid" inputmode="numeric" placeholder="e.g. 3500" maxlength="9">
+  <div id="moneyBox">
+    <label for="paid">Money received (KES)</label>
+    <input class="txt money" id="paid" inputmode="numeric" placeholder="e.g. 3500" maxlength="11">
   </div>
-  <label for="note" id="noteLbl">For which job or customer? (optional)</label>
-  <input class="txt" id="note" placeholder="e.g. Kitengela gate" maxlength="100">
+  <label for="note" id="noteLbl">Note (optional)</label>
+  <input class="txt" id="note" maxlength="100">
   <button class="primary" id="save"></button>
 </section>
 
@@ -107,7 +131,7 @@ input.txt{width:100%;font:inherit;padding:14px;border-radius:12px;border:1px sol
   <button class="link" data-go="home">← Back</button>
   <h2>Print this for the store door</h2>
   <div id="qr"></div>
-  <p class="center"><b id="qrStore"></b><br>Scan to record what you take or bring back</p>
+  <p class="center"><b id="qrStore"></b><br>Scan to record sales and stock</p>
   <p class="mut small">Anyone with this code can record stock. To cancel old codes, change the Store key in the Google Sheet's Settings tab and print a new one.</p>
 </section>
 
@@ -128,20 +152,40 @@ input.txt{width:100%;font:inherit;padding:14px;border-radius:12px;border:1px sol
   let S = store.get('state', null);          // last known stock, so the page works without signal
   let queue = store.get('queue', []);         // records not yet sent
   let who = store.get('who', '');
-  let cur = null, action = 'Took', unitBig = true, lastId = null;
+  let cur = null, action = 'Sold', unitBig = true, lastId = null;
 
   const plural = (w, n) => n === 1 ? w : w + (/(x|s|ch|sh)$/.test(w) ? 'es' : 's');
   const qtyText = (p, n) => {
     const a = Math.abs(n);
+    if (a === 0 && p.big && p.per > 1) return `0 ${plural(p.big, 0)}`;
     if (p.big && p.per > 1 && a >= p.per) {
       const whole = Math.floor(a / p.per), part = +(a - whole * p.per).toFixed(2);
       return `${whole.toLocaleString()} ${plural(p.big, whole)}` + (part ? ` and ${part} ${plural(p.unit, part)}` : '');
     }
     return `${a.toLocaleString()} ${plural(p.unit, a)}`;
   };
+  const kes = n => 'KES ' + Math.round(n || 0).toLocaleString();
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const verb = { Took: 'took', Returned: 'brought back', Received: 'received', Counted: 'counted' };
   const niceTime = t => { const d = new Date(t); return d.toLocaleDateString('en-KE', { weekday: 'short', day: 'numeric', month: 'short' }) + ', ' + d.toLocaleTimeString('en-KE', { hour: 'numeric', minute: '2-digit', hour12: true }); };
+  const prodOf = name => (S && S.products.find(p => p.name === name)) || { unit: '' };
+  const isSale = m => m.action === 'Sold' || m.action === 'Paid' || (m.action === 'Took' && m.amount != null);
+  const one = () => S && S.products.length === 1;
+
+  /** One sentence for a record, used in the feed, the done screen and WhatsApp. html=false gives plain text. */
+  function describe(m, html = true) {
+    const p = prodOf(m.product), q = qtyText(p, m.action === 'Counted' ? m.change : m.qty);
+    const B = s => html ? `<b>${esc(s)}</b>` : s, M = n => html ? `<span class="money">${kes(n)}</span>` : kes(n);
+    const of = one() ? '' : ` of ${html ? esc(m.product) : m.product}`;
+    const t = {
+      Sold: `sold ${B(q)}${of} for ${M(m.amount)}`,
+      Took: `took ${B(q)}${of}` + (m.amount != null ? `, paid ${M(m.amount)}` : ' to sell'),
+      Paid: `handed in ${M(m.amount)}` + (m.qty ? ` for ${B(q)} sold` : ''),
+      Returned: `brought back ${B(q)}${of}`,
+      Received: `received ${B(q)}${of}`,
+      Counted: `counted${of}: ${m.change >= 0 ? '+' : '−'}${B(q)} difference`,
+    }[m.action] || `${esc(m.action)} ${B(q)}`;
+    return `${html ? `<b>${esc(m.who)}</b>` : m.who} ${t}`;
+  }
 
   function show(name) {
     document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.id === 's-' + name));
@@ -156,73 +200,130 @@ input.txt{width:100%;font:inherit;padding:14px;border-radius:12px;border:1px sol
     else b.innerHTML = '';
   }
 
+  const holdingOf = (name, product) => (S.holdings || []).find(g => g.who === name && g.product === product);
+
   function render() {
     banner();
     if (!S) return;
+    S.holdings = S.holdings || [];
     $('store').textContent = S.store; document.title = S.store; $('qrStore').textContent = S.store;
-    $('whoBtn').hidden = !who; $('whoBtn').textContent = who ? `You: ${who}` : '';
+    $('whoBtn').hidden = !who; $('whoBtn').textContent = who ? `${who} · change` : '';
     $('names').innerHTML = S.people.map(n => `<button data-n="${esc(n)}">${esc(n)}</button>`).join('');
     $('names').querySelectorAll('button').forEach(b => b.onclick = () => { who = b.dataset.n; store.set('who', who); render(); show('home'); });
-    $('products').innerHTML = S.products.map((p, i) => {
-      const cls = !p.hasOpening ? 'none' : p.balance <= p.reorder ? 'low' : '';
-      const sub = !p.hasOpening ? 'Opening count not set yet' : p.balance <= p.reorder ? 'Running low' : 'In store';
-      return `<button class="prod" data-i="${i}"><div><div class="nm">${esc(p.name)}</div>
-        <div class="bal">${p.hasOpening ? esc(qtyText(p, p.balance)) : '—'}</div>
-        <div class="small mut"><span class="dot ${cls}"></span>${sub}</div></div><span class="go">›</span></button>`;
-    }).join('');
-    $('products').querySelectorAll('.prod').forEach(b => b.onclick = () => openRecord(S.products[b.dataset.i]));
-    const byName = Object.fromEntries(S.products.map(p => [p.name, p]));
+
+    $('products').innerHTML = S.products.length ? S.products.map((p, i) => {
+      const low = p.balance <= p.reorder;
+      return `<button class="hero" data-i="${i}"><div class="nm">${esc(p.name)} · in the store</div>
+        <div class="bal">${esc(qtyText(p, p.balance))}</div>
+        <div class="sub"><span class="dot ${low ? 'low' : ''}"></span>${low ? 'Running low: time to reorder' : 'In stock'}</div>
+        <div class="row"><div><b>${esc(qtyText(p, p.sold || 0))}</b><span class="sub">sold so far</span></div>
+        <div><b>${kes(p.money)}</b><span class="sub">money in</span></div></div>
+        <span class="go">Record a sale or movement</span></button>`;
+    }).join('') : '<p class="mut">No products yet. Fill in the opening stock in the Google Sheet\'s Products tab.</p>';
+    $('products').querySelectorAll('.hero').forEach(b => b.onclick = () => openRecord(S.products[b.dataset.i]));
+
+    const mine = S.products.map(p => [p, holdingOf(who, p.name)]).filter(([, g]) => g && g.holding > 0);
+    $('mine').innerHTML = mine.map(([p, g]) => `<div class="banner warn">You are holding <b>${esc(qtyText(p, g.holding))}</b>` +
+      `${one() ? '' : ` of ${esc(p.name)}`}. When you sell them, tap <b>Handing in money</b>. Bring back what you don't sell.</div>`).join('');
+
+    const out = S.holdings.filter(g => g.holding > 0);
+    $('people').innerHTML = out.length ? out.map(g => {
+      const p = prodOf(g.product);
+      return `<li><div class="hold"><span><b>${esc(g.who)}</b>${one() ? '' : ` <span class="mut small">${esc(g.product)}</span>`}</span><b>${esc(qtyText(p, g.holding))}</b></div>
+        <span class="t">took ${esc(qtyText(p, g.took))} · sold ${esc(qtyText(p, g.sold))} · back ${esc(qtyText(p, g.returned))} · handed in ${kes(g.money)}</span></li>`;
+    }).join('') : '<li class="mut">Nobody is holding stock right now.</li>';
+
     const pending = queue.map(q => ({ ...q, pending: true }));
     const items = [...pending.reverse(), ...S.recent].slice(0, 15);
-    $('feed').innerHTML = items.length ? items.map(m => {
-      const p = byName[m.product] || { unit: '' };
-      const q = qtyText(p, m.qty) + (m.action === 'Counted' ? ' of' : '');
-      return `<li><span class="t">${esc(niceTime(m.time))}${m.pending ? ' · not sent yet' : ''}</span>
-        <b>${esc(m.who)}</b> ${verb[m.action]} ${esc(q)}${m.action === 'Counted' ? '' : ' of'} ${esc(m.product)}${m.amount != null ? `, paid KES ${esc(Number(m.amount).toLocaleString())}` : ''}${m.note ? ` <span class="mut">(${esc(m.note)})</span>` : ''}</li>`;
-    }).join('') : '<li class="mut">Nothing recorded yet.</li>';
+    const today = new Date().toDateString();
+    $('todayMoney').textContent = kes(items.filter(m => new Date(m.time).toDateString() === today).reduce((t, m) => t + (m.amount || 0), 0));
+    $('feed').innerHTML = items.length ? items.map(m =>
+      `<li><span class="t">${esc(niceTime(m.time))}${m.pending ? ' · not sent yet' : ''}</span>${describe(m)}${m.note ? ` <span class="mut">(${esc(m.note)})</span>` : ''}</li>`
+    ).join('') : '<li class="mut">Nothing recorded yet.</li>';
   }
 
   // ---------- record screen ----------
+  const COPY = {
+    Sold:     { qty: 'How many did you sell?', note: 'Customer (optional)', ph: 'e.g. JEBTA Hardware', btn: n => `Record sale: ${n}` },
+    Took:     { qty: 'How many are you taking?', note: 'Who or where for? (optional)', ph: 'e.g. Kinoo hardware shops', btn: n => `I'm taking ${n}` },
+    Paid:     { qty: 'How many of them did you sell?', note: 'Customers (optional)', ph: 'e.g. 4 to Mwangi, 3 to Zambezi shop', btn: () => 'Hand in money' },
+    Returned: { qty: 'How many are you bringing back?', note: 'Note (optional)', ph: '', btn: n => `Bring back ${n}` },
+    Received: { qty: 'How many arrived?', note: 'Supplier or note (optional)', ph: '', btn: n => `Received ${n}` },
+    Counted:  { qty: 'How many are in the store now?', note: 'Note (optional)', ph: '', btn: n => `Counted ${n}` },
+  };
+
   function openRecord(p) {
-    cur = p; action = 'Took'; unitBig = !!(p.big && p.per > 1);
+    cur = p; unitBig = !!(p.big && p.per > 1);
+    const g = holdingOf(who, p.name);
+    action = g && g.holding > 0 ? 'Paid' : 'Sold';
     $('rProd').textContent = p.name;
-    $('rBal').textContent = p.hasOpening ? `In store: ${qtyText(p, p.balance)}` : '';
+    $('rBal').textContent = `In the store: ${qtyText(p, p.balance)}`;
     $('qty').value = 1; $('note').value = ''; $('paid').value = '';
     $('more').hidden = true; $('moreBtn').hidden = false;
     $('units').innerHTML = unitBig
-      ? `<button data-u="big" aria-pressed="true">${esc(plural(p.big, 2))}</button><button data-u="small">${esc(plural(p.unit, 2))}</button>` : '';
+      ? `<button data-u="big">${esc(plural(p.big, 2))}</button><button data-u="small">${esc(plural(p.unit, 2))}</button>` : '';
     $('units').querySelectorAll('button').forEach(b => b.onclick = () => { unitBig = b.dataset.u === 'big'; syncRecord(); });
     syncRecord(); show('record');
   }
   document.querySelectorAll('[data-a]').forEach(b => b.onclick = () => { action = b.dataset.a; syncRecord(); });
   $('moreBtn').onclick = () => { $('more').hidden = false; $('moreBtn').hidden = true; };
-  $('minus').onclick = () => { $('qty').value = Math.max(action === 'Counted' ? 0 : 1, (+$('qty').value || 0) - 1); syncRecord(); };
+  const minQty = () => action === 'Counted' || action === 'Paid' ? 0 : 1;
+  $('minus').onclick = () => { $('qty').value = Math.max(minQty(), (+$('qty').value || 0) - 1); syncRecord(); };
   $('plus').onclick = () => { $('qty').value = (+$('qty').value || 0) + 1; syncRecord(); };
   $('qty').oninput = syncRecord; $('paid').oninput = syncRecord;
   const smallQty = () => (+$('qty').value || 0) * (unitBig ? cur.per : 1);
+  const money = () => { const v = $('paid').value.replace(/[,\s]/g, ''); return /^\d+$/.test(v) ? +v : null; };
+
   function syncRecord() {
+    const c = COPY[action];
     document.querySelectorAll('[data-a]').forEach(b => b.setAttribute('aria-pressed', b.dataset.a === action));
     $('units').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', (b.dataset.u === 'big') === unitBig));
-    const n = +$('qty').value || 0, u = unitBig ? cur.big : cur.unit;
-    const words = { Took: 'I took', Returned: 'I brought back', Received: 'Received', Counted: 'Counted' }[action];
-    $('save').textContent = `${words} ${n} ${plural(u, n)}`;
-    $('paidBox').hidden = action !== 'Took';
-    const paid = $('paid').value.replace(/[,\s]/g, '');
-    $('save').disabled = !(n > 0 || (action === 'Counted' && n === 0)) || (action === 'Took' && paid !== '' && !/^\d+$/.test(paid));
+    const n = +$('qty').value || 0, u = unitBig ? cur.big : cur.unit, q = smallQty();
+    const needsMoney = action === 'Sold' || action === 'Paid';
+    $('qtyLbl').textContent = c.qty; $('noteLbl').textContent = c.note; $('note').placeholder = c.ph;
+    $('moneyBox').hidden = !needsMoney;
+    $('paid').placeholder = cur.price ? `e.g. ${(Math.max(q, 1) * cur.price).toLocaleString()}` : 'e.g. 3500';
+
+    const g = holdingOf(who, cur.name), held = g ? g.holding : 0;
+    let hint = '';
+    if (action === 'Paid' || action === 'Returned') {
+      hint = held ? `<div class="banner info">You are holding <b>${esc(qtyText(cur, held))}</b>.</div>`
+                  : `<div class="banner warn">You are not holding any ${esc(cur.name)}. If you sold from the store just now, choose <b>Sold</b>.</div>`;
+      if (held && q > held) hint = `<div class="banner warn">That's more than the ${esc(qtyText(cur, held))} you are holding. Check the number.</div>`;
+    }
+    if ((action === 'Sold' || action === 'Took') && q > cur.balance) hint = `<div class="banner warn">The store only has ${esc(qtyText(cur, cur.balance))}. Check the number.</div>`;
+    $('hint').innerHTML = hint;
+
+    $('save').textContent = c.btn(`${n} ${plural(u, n)}`) + (needsMoney && money() ? ` · ${kes(money())}` : '');
+    const qtyOk = n > 0 || (n === 0 && minQty() === 0);
+    $('save').disabled = !qtyOk || (needsMoney && !(money() > 0));
   }
+
+  function applyLocal(st, r) {
+    const p = st.products.find(x => x.name === r.product); if (!p) return;
+    p.balance += r.change;
+    if (isSale(r)) { p.sold = (p.sold || 0) + r.qty; p.money = (p.money || 0) + (r.amount || 0); }
+    if (!['Took', 'Paid', 'Returned'].includes(r.action) || (r.action === 'Took' && r.amount != null)) return;
+    st.holdings = st.holdings || [];
+    let g = st.holdings.find(x => x.who === r.who && x.product === r.product);
+    if (!g) { if (r.action !== 'Took') return; g = { who: r.who, product: r.product, took: 0, sold: 0, returned: 0, money: 0, holding: 0 }; st.holdings.push(g); }
+    if (r.action === 'Took') g.took += r.qty;
+    else if (r.action === 'Paid') { g.sold += r.qty; g.money += r.amount || 0; }
+    else g.returned += r.qty;
+    g.holding = Math.max(0, g.took - g.sold - g.returned);
+  }
+
   $('save').onclick = () => {
     const rec = { op: 'record', id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), who,
       product: cur.name, action, qty: smallQty(), note: $('note').value.trim(), time: new Date().toISOString() };
-    const paid = $('paid').value.replace(/[,\s]/g, '');
-    if (action === 'Took' && paid !== '') rec.amount = Number(paid);
-    // update the local view straight away
+    if (action === 'Sold' || action === 'Paid') rec.amount = money();
     const p = S.products.find(x => x.name === cur.name);
-    rec.change = action === 'Took' ? -rec.qty : action === 'Counted' ? rec.qty - p.balance : rec.qty;
-    p.balance += rec.change; if (action === 'Took') p.out += rec.qty;
-    store.set('state', S);
+    rec.change = { Sold: -rec.qty, Took: -rec.qty, Paid: 0, Returned: rec.qty, Received: rec.qty, Counted: rec.qty - p.balance }[action];
+    applyLocal(S, rec); store.set('state', S);
     queue.push(rec); store.set('queue', queue); lastId = rec.id;
-    $('doneText').innerHTML = `${esc(who)} ${verb[action]} <b>${esc(qtyText(cur, rec.qty))}</b> of ${esc(cur.name)}`;
-    $('doneSub').textContent = `${rec.amount != null ? `Paid KES ${rec.amount.toLocaleString()}. ` : ''}${cur.name} now: ${qtyText(cur, p.balance)}`;
+    $('doneText').innerHTML = describe(rec);
+    const g = holdingOf(who, cur.name);
+    $('doneSub').textContent = `In the store now: ${qtyText(cur, p.balance)}` + (g && ['Took', 'Paid', 'Returned'].includes(action) ? `. You are holding ${qtyText(cur, g.holding)}.` : '.');
     $('undoBtn').hidden = false; $('tick').hidden = false;
     show('done'); flush();
   };
@@ -231,13 +332,12 @@ input.txt{width:100%;font:inherit;padding:14px;border-radius:12px;border:1px sol
     if (i >= 0) { queue.splice(i, 1); store.set('queue', queue); await load(); }
     else {
       const r = await call({ op: 'undo', id: lastId, who }).catch(() => null);
-      if (!r || !r.ok) { alertBox(r ? r.error : 'No network. Undo needs signal. Try again in a moment.'); return; }
+      if (!r || !r.ok) { $('doneSub').textContent = r ? r.error : 'No network. Undo needs signal. Try again in a moment.'; return; }
       take(r.state);
     }
     $('undoBtn').hidden = true; $('tick').hidden = true; $('doneText').textContent = 'Cancelled. Nothing was recorded.'; $('doneSub').textContent = '';
     render();
   };
-  function alertBox(msg) { $('doneSub').textContent = msg; }
 
   // ---------- network ----------
   async function call(body) {
@@ -246,7 +346,9 @@ input.txt{width:100%;font:inherit;padding:14px;border-radius:12px;border:1px sol
   }
   function take(state) {
     S = { ...state, _at: new Date().toISOString() };
-    queue.forEach(q => { const p = S.products.find(x => x.name === q.product); if (p) p.balance += q.change; });
+    S.products = S.products.filter(p => p.hasOpening);   // products without an opening count are not in use yet
+    S.holdings = S.holdings || [];
+    queue.forEach(q => applyLocal(S, q));
     store.set('state', S);
   }
   let flushing = false;
@@ -275,10 +377,15 @@ input.txt{width:100%;font:inherit;padding:14px;border-radius:12px;border:1px sol
   // ---------- extras ----------
   $('whoBtn').onclick = () => { render(); show('who'); };
   $('copyBtn').onclick = async () => {
-    const lines = [`*${S.store}: stock now*`, ''];
-    S.products.forEach(p => lines.push(`• ${p.name}: *${p.hasOpening ? qtyText(p, p.balance) : 'not counted yet'}*${p.hasOpening && p.balance <= p.reorder ? ' ⚠️ reorder' : ''}`));
+    const lines = [`*${S.store}*`, ''];
+    S.products.forEach(p => lines.push(`• ${p.name} in the store: *${qtyText(p, p.balance)}*${p.balance <= p.reorder ? ' ⚠️ reorder' : ''}`));
+    const out = S.holdings.filter(g => g.holding > 0);
+    if (out.length) { lines.push('', '_With people:_'); out.forEach(g => lines.push(`- ${g.who}: ${qtyText(prodOf(g.product), g.holding)}`)); }
     const today = new Date().toDateString(), todays = S.recent.filter(m => new Date(m.time).toDateString() === today);
-    if (todays.length) { lines.push('', '_Today:_'); todays.slice(0, 10).forEach(m => lines.push(`- ${m.who} ${verb[m.action]} ${qtyText(S.products.find(p => p.name === m.product) || { unit: '' }, m.qty)} ${m.product}`)); }
+    if (todays.length) {
+      lines.push('', `_Today (money in ${kes(todays.reduce((t, m) => t + (m.amount || 0), 0))}):_`);
+      todays.slice(0, 12).forEach(m => lines.push(`- ${describe(m, false)}`));
+    }
     try { await navigator.clipboard.writeText(lines.join('\n')); $('copyBtn').textContent = 'Copied. Paste it in WhatsApp'; }
     catch (_) { $('copyBtn').textContent = 'Copy failed'; }
     setTimeout(() => $('copyBtn').textContent = 'Copy summary for WhatsApp', 3000);
